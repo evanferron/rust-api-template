@@ -2,6 +2,7 @@ use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
+use validator::{Validate, ValidationError};
 
 use crate::db::user::model::User;
 
@@ -20,7 +21,6 @@ pub struct UserResponse {
     pub updated_at: NaiveDateTime,
 }
 
-/// Conversion depuis le modèle Diesel vers le DTO de réponse.
 impl From<User> for UserResponse {
     fn from(user: User) -> Self {
         Self {
@@ -39,18 +39,54 @@ impl From<User> for UserResponse {
 // ---------------------------------------------------------------------------
 
 /// Tous les champs sont optionnels — seuls les champs fournis sont mis à jour.
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize, ToSchema, Validate)]
+#[serde(deny_unknown_fields)]
+#[validate(schema(function = "validate_password_change"))]
 pub struct UpdateUserRequest {
     #[schema(example = "evan@example.com")]
+    #[validate(email(message = "Invalid email address"))]
     pub email: Option<String>,
 
     #[schema(example = "Evan")]
+    #[validate(length(
+        min = 1,
+        max = 100,
+        message = "First name must be between 1 and 100 characters"
+    ))]
     pub first_name: Option<String>,
 
     #[schema(example = "Ferron")]
+    #[validate(length(
+        min = 1,
+        max = 100,
+        message = "Last name must be between 1 and 100 characters"
+    ))]
     pub last_name: Option<String>,
 
-    /// Si fourni, l'ancien mot de passe est requis pour confirmer le changement
+    /// Nouveau mot de passe — requiert current_password
+    #[validate(length(
+        min = 8,
+        max = 100,
+        message = "Password must be between 8 and 100 characters"
+    ))]
     pub new_password: Option<String>,
+
+    /// Mot de passe actuel — requis si new_password est fourni
+    #[validate(length(min = 1, message = "Current password is required"))]
     pub current_password: Option<String>,
+}
+
+/// Validation au niveau du struct — vérifie la cohérence entre new_password et current_password.
+/// Appelée après la validation des champs individuels.
+fn validate_password_change(req: &UpdateUserRequest) -> Result<(), ValidationError> {
+    match (&req.new_password, &req.current_password) {
+        // new_password fourni sans current_password → erreur
+        (Some(_), None) => {
+            let mut err = ValidationError::new("password_change");
+            err.message = Some("current_password is required when setting a new password".into());
+            Err(err)
+        }
+        // current_password fourni sans new_password → inutile mais on laisse passer
+        _ => Ok(()),
+    }
 }

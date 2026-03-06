@@ -1,16 +1,23 @@
+use crate::app::config::Config;
+use crate::app::models::{AppState, Repositories, Services};
+use crate::core::logger;
+use axum::BoxError;
+use axum::error_handling::HandleErrorLayer;
+use axum::extract::MatchedPath;
+use axum::http::{HeaderValue, StatusCode};
 use axum::{Router, serve};
 use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::bb8::Pool;
 use std::sync::Arc;
 use std::time::Duration;
-use tower_http::cors::{Any, CorsLayer};
+use tower::ServiceBuilder;
+use tower::timeout::TimeoutLayer;
+use tower_http::compression::CompressionLayer;
+use tower_http::cors::CorsLayer;
+use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::trace::{DefaultOnFailure, DefaultOnResponse, TraceLayer};
 use tracing::Level;
-
-use crate::app::config::Config;
-use crate::app::models::{AppState, Repositories, Services};
-use crate::core::logger;
 
 #[derive(Clone)]
 pub struct Server {
@@ -82,7 +89,12 @@ impl Server {
 
         // --- CORS ---
         let cors = CorsLayer::new()
-            .allow_origin(Any)
+            .allow_origin(
+                std::env::var("FRONTEND_URL")
+                    .unwrap_or_else(|_| "http://localhost:5173".to_string())
+                    .parse::<HeaderValue>()
+                    .unwrap(),
+            )
             .allow_methods([
                 axum::http::Method::GET,
                 axum::http::Method::POST,
@@ -92,11 +104,26 @@ impl Server {
             .allow_headers([
                 axum::http::header::CONTENT_TYPE,
                 axum::http::header::AUTHORIZATION,
-            ]);
+            ])
+            .allow_credentials(true);
 
         // --- TraceLayer HTTP ---
         // Contrôlable via RUST_LOG=tower_http=debug
         let trace_layer = TraceLayer::new_for_http()
+            .make_span_with(|request: &axum::http::Request<_>| {
+                let matched_path = request
+                    .extensions()
+                    .get::<MatchedPath>()
+                    .map(|p| p.as_str())
+                    .unwrap_or(request.uri().path());
+
+                tracing::info_span!(
+                    "http_request",
+                    method  = %request.method(),
+                    path    = %matched_path,
+                    version = ?request.version(),
+                )
+            })
             .on_request(())
             .on_response(
                 DefaultOnResponse::new()
@@ -116,7 +143,17 @@ impl Server {
             ))
             .nest("/api", crate::routes::create_router(app_state))
             .layer(cors)
-            .layer(trace_layer);
+            .layer(trace_layer)
+            .layer(
+                // Timeout global de 30s pour toutes les requêtes, avec gestion d'erreur personnalisée
+                ServiceBuilder::new()
+                    .layer(HandleErrorLayer::new(|_: BoxError| async {
+                        StatusCode::REQUEST_TIMEOUT
+                    }))
+                    .layer(TimeoutLayer::new(Duration::from_secs(30))),
+            )
+            .layer(RequestBodyLimitLayer::new(1024 * 1024)) // Limit de payload à 1MB pour éviter les abus
+            .layer(CompressionLayer::new()); // Compression des réponses pour économiser la bande passante
 
         // --- Lancement ---
         let addr = format!("{}:{}", config.server.host, config.server.port);

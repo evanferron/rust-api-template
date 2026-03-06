@@ -3,9 +3,7 @@ use utoipa::OpenApi;
 use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
 
 use crate::core::errors::ErrorResponse;
-use crate::modules::auth::dto::{
-    LoginRequest, LoginResponse, RefreshRequest, RefreshResponse, RegisterRequest,
-};
+use crate::modules::auth::dto::{LoginRequest, LoginResponse, RefreshResponse, RegisterRequest};
 use crate::modules::health::dto::HealthResponse;
 use crate::modules::user::dto::{UpdateUserRequest, UserResponse};
 
@@ -28,7 +26,6 @@ use crate::modules::user::dto::{UpdateUserRequest, UserResponse};
             RegisterRequest,
             LoginRequest,
             LoginResponse,
-            RefreshRequest,
             RefreshResponse,
             UserResponse,
             UpdateUserRequest,
