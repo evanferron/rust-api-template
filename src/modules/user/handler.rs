@@ -5,24 +5,18 @@ use axum::{
 };
 use uuid::Uuid;
 
-use crate::app::models::AppState;
 use crate::core::errors::{ApiError, ErrorResponse};
+use crate::core::validator::ValidatedJson;
 use crate::modules::auth::helpers::Claims;
 use crate::modules::user::dto::{UpdateUserRequest, UserResponse};
-use crate::modules::user::service::UserService;
-
-// ---------------------------------------------------------------------------
-// GET /users
-// ---------------------------------------------------------------------------
+use crate::{bootstrap::models::AppState, modules::user::service};
 
 #[utoipa::path(
-    get,
-    path = "/api/users",
-    tag = "users",
+    get, path = "/api/users", tag = "users",
     security(("bearer_auth" = [])),
     responses(
-        (status = 200, description = "Liste des utilisateurs", body = Vec<UserResponse>),
-        (status = 401, description = "Non authentifié",        body = ErrorResponse),
+        (status = 200, body = Vec<UserResponse>),
+        (status = 401, body = ErrorResponse),
     )
 )]
 pub async fn get_all(
@@ -30,26 +24,17 @@ pub async fn get_all(
     Extension(_claims): Extension<Claims>,
 ) -> Result<Json<Vec<UserResponse>>, ApiError> {
     let mut conn = state.pool.get().await.map_err(ApiError::from)?;
-    let users = UserService::get_all(&mut conn).await?;
-    Ok(Json(users))
+    Ok(Json(service::get_all(&mut conn).await?))
 }
 
-// ---------------------------------------------------------------------------
-// GET /users/:id
-// ---------------------------------------------------------------------------
-
 #[utoipa::path(
-    get,
-    path = "/api/users/{id}",
-    tag = "users",
+    get, path = "/api/users/{id}", tag = "users",
     security(("bearer_auth" = [])),
-    params(
-        ("id" = Uuid, Path, description = "UUID de l'utilisateur")
-    ),
+    params(("id" = Uuid, Path, description = "UUID de l'utilisateur")),
     responses(
-        (status = 200, description = "Utilisateur trouvé",  body = UserResponse),
-        (status = 401, description = "Non authentifié",     body = ErrorResponse),
-        (status = 404, description = "Utilisateur introuvable", body = ErrorResponse),
+        (status = 200, body = UserResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
     )
 )]
 pub async fn get_by_id(
@@ -58,66 +43,46 @@ pub async fn get_by_id(
     Path(id): Path<Uuid>,
 ) -> Result<Json<UserResponse>, ApiError> {
     let mut conn = state.pool.get().await.map_err(ApiError::from)?;
-    let user = UserService::get_by_id(&mut conn, id).await?;
-    Ok(Json(user))
+    Ok(Json(service::get_by_id(&mut conn, id).await?))
 }
 
-// ---------------------------------------------------------------------------
-// PUT /users/:id
-// ---------------------------------------------------------------------------
-
 #[utoipa::path(
-    put,
-    path = "/api/users/{id}",
-    tag = "users",
+    put, path = "/api/users/{id}", tag = "users",
     security(("bearer_auth" = [])),
-    params(
-        ("id" = Uuid, Path, description = "UUID de l'utilisateur")
-    ),
+    params(("id" = Uuid, Path, description = "UUID de l'utilisateur")),
     request_body = UpdateUserRequest,
     responses(
-        (status = 200, description = "Utilisateur mis à jour",  body = UserResponse),
-        (status = 400, description = "Données invalides",        body = ErrorResponse),
-        (status = 401, description = "Non authentifié",          body = ErrorResponse),
-        (status = 403, description = "Action non autorisée",     body = ErrorResponse),
-        (status = 404, description = "Utilisateur introuvable",  body = ErrorResponse),
+        (status = 200, body = UserResponse),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
     )
 )]
 pub async fn update(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
     Path(id): Path<Uuid>,
-    Json(payload): Json<UpdateUserRequest>,
+    ValidatedJson(payload): ValidatedJson<UpdateUserRequest>,
 ) -> Result<Json<UserResponse>, ApiError> {
-    // Un utilisateur ne peut modifier que son propre profil
     if claims.sub != id {
         return Err(ApiError::Authorization(
             "You can only update your own profile".to_string(),
         ));
     }
-
     let mut conn = state.pool.get().await.map_err(ApiError::from)?;
-    let user = UserService::update(&mut conn, id, payload).await?;
-    Ok(Json(user))
+    Ok(Json(service::update(&mut conn, id, payload).await?))
 }
 
-// ---------------------------------------------------------------------------
-// DELETE /users/:id
-// ---------------------------------------------------------------------------
-
 #[utoipa::path(
-    delete,
-    path = "/api/users/{id}",
-    tag = "users",
+    delete, path = "/api/users/{id}", tag = "users",
     security(("bearer_auth" = [])),
-    params(
-        ("id" = Uuid, Path, description = "UUID de l'utilisateur")
-    ),
+    params(("id" = Uuid, Path, description = "UUID de l'utilisateur")),
     responses(
         (status = 204, description = "Utilisateur supprimé"),
-        (status = 401, description = "Non authentifié",         body = ErrorResponse),
-        (status = 403, description = "Action non autorisée",    body = ErrorResponse),
-        (status = 404, description = "Utilisateur introuvable", body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
     )
 )]
 pub async fn delete(
@@ -125,14 +90,12 @@ pub async fn delete(
     Extension(claims): Extension<Claims>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
-    // Un utilisateur ne peut supprimer que son propre compte
     if claims.sub != id {
         return Err(ApiError::Authorization(
             "You can only delete your own account".to_string(),
         ));
     }
-
     let mut conn = state.pool.get().await.map_err(ApiError::from)?;
-    UserService::delete(&mut conn, id).await?;
+    service::delete(&mut conn, id).await?;
     Ok(StatusCode::NO_CONTENT)
 }

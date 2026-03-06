@@ -1,20 +1,20 @@
-use diesel::prelude::*;
+use diesel::AsChangeset;
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
-use crate::core::errors::ApiError;
-use crate::db::schema::users::dsl;
-use crate::db::user::model::{NewUser, User};
-use crate::modules::auth::dto::RegisterRequest;
-use crate::modules::user::dto::UpdateUserRequest;
+use crate::{
+    core::errors::ApiError,
+    db::{
+        schema::users::dsl,
+        user::model::{NewUser, User},
+    },
+    modules::{auth::dto::RegisterRequest, user::dto::UpdateUserRequest},
+};
 
 pub struct UserRepository;
 
 impl UserRepository {
-    // -----------------------------------------------------------------------
-    // Find all
-    // -----------------------------------------------------------------------
-
     pub async fn find_all(conn: &mut AsyncPgConnection) -> Result<Vec<User>, ApiError> {
         dsl::users
             .order(dsl::created_at.desc())
@@ -22,10 +22,6 @@ impl UserRepository {
             .await
             .map_err(ApiError::from)
     }
-
-    // -----------------------------------------------------------------------
-    // Find by id
-    // -----------------------------------------------------------------------
 
     pub async fn find_by_id(
         conn: &mut AsyncPgConnection,
@@ -39,10 +35,6 @@ impl UserRepository {
             .map_err(ApiError::from)
     }
 
-    // -----------------------------------------------------------------------
-    // Find by email
-    // -----------------------------------------------------------------------
-
     pub async fn find_by_email(
         conn: &mut AsyncPgConnection,
         email: &str,
@@ -55,23 +47,18 @@ impl UserRepository {
             .map_err(ApiError::from)
     }
 
-    // -----------------------------------------------------------------------
-    // Create
-    // -----------------------------------------------------------------------
-
     pub async fn create(
         conn: &mut AsyncPgConnection,
         payload: RegisterRequest,
-        password_hash: String,
+        password: String,
     ) -> Result<User, ApiError> {
         let new_user = NewUser {
             id: Uuid::new_v4(),
             email: payload.email,
-            password: password_hash,
+            password,
             first_name: payload.first_name,
             last_name: payload.last_name,
         };
-
         diesel::insert_into(dsl::users)
             .values(&new_user)
             .get_result::<User>(conn)
@@ -79,24 +66,18 @@ impl UserRepository {
             .map_err(ApiError::from)
     }
 
-    // -----------------------------------------------------------------------
-    // Update
-    // -----------------------------------------------------------------------
-
     pub async fn update(
         conn: &mut AsyncPgConnection,
         id: Uuid,
         payload: UpdateUserRequest,
-        new_password_hash: Option<String>,
+        new_password: Option<String>,
     ) -> Result<User, ApiError> {
-        // Diesel impose de passer par un struct qui implémente AsChangeset
         let changeset = UserChangeset {
             email: payload.email,
             first_name: payload.first_name,
             last_name: payload.last_name,
-            password: new_password_hash,
+            password: new_password,
         };
-
         diesel::update(dsl::users.find(id))
             .set(&changeset)
             .get_result::<User>(conn)
@@ -104,25 +85,15 @@ impl UserRepository {
             .map_err(ApiError::from)
     }
 
-    // -----------------------------------------------------------------------
-    // Delete
-    // -----------------------------------------------------------------------
-
     pub async fn delete(conn: &mut AsyncPgConnection, id: Uuid) -> Result<bool, ApiError> {
         let rows = diesel::delete(dsl::users.find(id))
             .execute(conn)
             .await
             .map_err(ApiError::from)?;
-
         Ok(rows > 0)
     }
 }
 
-// ---------------------------------------------------------------------------
-// Changeset interne pour l'update partiel
-// ---------------------------------------------------------------------------
-
-/// Tous les champs sont Option — Diesel ne met à jour que les Some(_).
 #[derive(AsChangeset)]
 #[diesel(table_name = crate::db::schema::users)]
 struct UserChangeset {

@@ -1,5 +1,5 @@
-use crate::app::config::Config;
-use crate::app::models::{AppState, Repositories, Services};
+use crate::bootstrap::config::Config;
+use crate::bootstrap::models::AppState;
 use crate::core::logger;
 use crate::core::middlewares::rate_limit::RateLimitStore;
 use axum::BoxError;
@@ -11,7 +11,6 @@ use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::bb8::Pool;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::Duration;
 use tower::ServiceBuilder;
 use tower::timeout::TimeoutLayer;
@@ -78,21 +77,26 @@ impl Server {
             tracing::info!("Migrations applied successfully");
         }
 
-        // --- Dependency Injection ---
-        let repositories = Arc::new(Repositories {});
-        let services = Services {};
-        let rate_limit = RateLimitStore::new(
-            10,  // 10 req/min sur les routes auth (login, register, refresh)
-            120, // 120 req/min sur les routes protégées
-        );
-
         let app_state = AppState {
             pool,
             config: config.clone(),
-            services,
-            repositories,
-            rate_limit,
+            rate_limit: RateLimitStore::new(
+                10,  // 10 req/min sur les routes auth (login, register, refresh)
+                120, // 120 req/min sur les routes protégées
+            ),
         };
+
+        // thread périodique qui vient nettoyer les caches des rate limiters pour éviter une croissance infinie en cas de nombreux clients uniques
+        let rate_limit_clone = app_state.rate_limit.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(3600)); // nettoyage toutes les heures
+            loop {
+                interval.tick().await;
+                rate_limit_clone.by_ip.retain_recent();
+                rate_limit_clone.by_user.retain_recent();
+                tracing::debug!("Rate limit cache cleaned");
+            }
+        });
 
         // --- CORS ---
         let cors = CorsLayer::new()

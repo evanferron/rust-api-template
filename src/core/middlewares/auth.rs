@@ -5,7 +5,7 @@ use axum::{
     response::Response,
 };
 
-use crate::app::models::AppState;
+use crate::bootstrap::models::AppState;
 use crate::core::errors::ApiError;
 use crate::modules::auth::helpers::verify_token;
 

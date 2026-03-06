@@ -1,5 +1,5 @@
 use crate::core::middlewares::auth::require_auth;
-use crate::{app::models::AppState, core::middlewares::rate_limit::rate_limit_by_user};
+use crate::{bootstrap::models::AppState, core::middlewares::rate_limit::rate_limit_by_user};
 use axum::{
     Router,
     routing::{delete, get, put},

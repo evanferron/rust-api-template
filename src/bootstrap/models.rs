@@ -1,9 +1,13 @@
-use crate::app::config::Config;
-use crate::core::middlewares::rate_limit::RateLimitStore;
 use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::bb8::Pool;
 use serde::Deserialize;
-use std::sync::Arc;
+
+use crate::bootstrap::config::Config;
+use crate::core::middlewares::rate_limit::RateLimitStore;
+
+// ---------------------------------------------------------------------------
+// Config structs
+// ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct ServerConfig {
@@ -16,9 +20,9 @@ pub struct ServerConfig {
 pub struct DatabaseConfig {
     pub url: String,
     pub max_connections: u32,
-    pub acquire_timeout: u64, // seconds
-    pub idle_timeout: u64,    // seconds
-    pub max_lifetime: u64,    // seconds
+    pub acquire_timeout: u64,
+    pub idle_timeout: u64,
+    pub max_lifetime: u64,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -29,16 +33,13 @@ pub struct JwtConfig {
     pub refresh_expiration: u32,
 }
 
+// ---------------------------------------------------------------------------
+// AppState
+// ---------------------------------------------------------------------------
+
 #[derive(Clone)]
 pub struct AppState {
     pub pool: Pool<AsyncPgConnection>,
     pub config: Config,
-    pub services: Services,
-    pub repositories: Arc<Repositories>,
     pub rate_limit: RateLimitStore,
 }
-
-#[derive(Clone)]
-pub struct Services {}
-
-pub struct Repositories {}

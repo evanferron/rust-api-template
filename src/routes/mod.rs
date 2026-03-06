@@ -1,6 +1,6 @@
 pub mod swagger;
 
-use crate::app::models::AppState;
+use crate::bootstrap::models::AppState;
 use crate::modules::{auth, health, user};
 use axum::Router;
 

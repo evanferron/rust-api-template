@@ -57,3 +57,4 @@ validator = { version = "0.20.0", features = ["derive"] }
 time = "0.3"
 governor = "0.10.4"
 dashmap = "6"
+async-trait = "0.1"

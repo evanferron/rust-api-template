@@ -1,4 +1,4 @@
-use crate::app::models::AppState;
+use crate::bootstrap::models::AppState;
 use crate::core::middlewares::rate_limit::rate_limit_by_ip;
 use axum::{Router, routing::post};
 

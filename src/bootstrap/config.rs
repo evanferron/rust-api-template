@@ -1,4 +1,4 @@
-use crate::app::models::{DatabaseConfig, JwtConfig, ServerConfig};
+use crate::bootstrap::models::{DatabaseConfig, JwtConfig, ServerConfig};
 use serde::Deserialize;
 use std::env;
 

@@ -11,7 +11,7 @@ use axum::{
 use governor::{Quota, RateLimiter, clock::DefaultClock, state::keyed::DefaultKeyedStateStore};
 use std::net::SocketAddr;
 
-use crate::app::models::AppState;
+use crate::bootstrap::models::AppState;
 use crate::core::errors::ApiError;
 use crate::modules::auth::helpers::Claims;
 
