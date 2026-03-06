@@ -1,0 +1,43 @@
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "app"
+path = "src/lib.rs"
+
+[[bin]]
+name = "server"
+path = "src/main.rs"
+
+[dependencies]
+# API
+axum = { version = "0.8.8" }
+tokio = { version = "1.50.0", features = ["full"] }
+dotenvy = "0.15"
+utoipa = { version = "5.4.0", features = ["axum_extras", "uuid", "chrono"] }
+utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
+tower-http = { version = "0.6.8", features = [
+    "cors",
+    "trace",
+    "limit",
+] } # Pour CORS et Logs
+
+# Database
+diesel = { version = "2.3.6", features = ["postgres", "uuid", "chrono"] }
+diesel-async = { version = "0.7.4", features = ["postgres", "bb8"] }
+diesel_migrations = { version = "2", features = ["postgres"] }
+
+
+# Utils
+serde = { version = "1.0.228", features = ["derive"] }
+thiserror = "2.0.18"
+serde_json = "1.0.149"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1.0.102"
+jsonwebtoken = "10.3.0"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.22.0", features = ["v4", "serde"] }
+bcrypt = "0.19.0"
