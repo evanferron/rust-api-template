@@ -14,9 +14,9 @@ pub mod service;
 pub fn routes(state: AppState) -> Router {
     Router::new()
         .route("/users", get(handler::get_all))
-        .route("/users/:id", get(handler::get_by_id))
-        .route("/users/:id", put(handler::update))
-        .route("/users/:id", delete(handler::delete))
+        .route("/users/{id}", get(handler::get_by_id))
+        .route("/users/{id}", put(handler::update))
+        .route("/users/{id}", delete(handler::delete))
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             require_auth,

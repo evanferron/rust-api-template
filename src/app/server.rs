@@ -1,7 +1,3 @@
-use crate::app::config::Config;
-use crate::app::models::{AppState, Repositories, Services};
-use crate::routes::swagger::ApiDoc;
-
 use axum::{Router, serve};
 use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
@@ -9,9 +5,12 @@ use diesel_async::pooled_connection::bb8::Pool;
 use std::sync::Arc;
 use std::time::Duration;
 use tower_http::cors::{Any, CorsLayer};
-use tower_http::trace::TraceLayer;
-use utoipa::OpenApi;
-use utoipa_swagger_ui::SwaggerUi;
+use tower_http::trace::{DefaultOnFailure, DefaultOnResponse, TraceLayer};
+use tracing::Level;
+
+use crate::app::config::Config;
+use crate::app::models::{AppState, Repositories, Services};
+use crate::core::logger;
 
 #[derive(Clone)]
 pub struct Server {
@@ -26,19 +25,14 @@ impl Server {
     pub async fn run(&self) -> std::io::Result<()> {
         let config = self.config.clone();
 
-        // --- Logger (Tracing) ---
-        tracing_subscriber::fmt()
-            .with_env_filter(
-                tracing_subscriber::EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| "info,tower_http=debug".into()),
-            )
-            .with_target(false)
-            .with_thread_ids(false)
-            .with_file(false)
-            .with_line_number(false)
-            .init();
+        // --- Logger ---
+        // Initialisé en premier pour capturer tous les logs suivants
+        logger::init(&config.server.environment);
 
-        tracing::info!("Starting server with configuration: {:#?}", config);
+        tracing::info!(
+            environment = %config.server.environment,
+            "Starting server"
+        );
 
         // --- Database Pool ---
         let manager = AsyncDieselConnectionManager::<AsyncPgConnection>::new(&config.database.url);
@@ -55,16 +49,15 @@ impl Server {
         tracing::info!("Database pool created successfully");
 
         // --- Migrations ---
-        // diesel-async ne gère pas les migrations, on utilise diesel_migrations
         {
+            use diesel::Connection;
+            use diesel::pg::PgConnection;
             use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
-            const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
 
-            // Les migrations Diesel sont synchrones : on utilise un thread bloquant
+            const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
             let db_url = config.database.url.clone();
+
             tokio::task::spawn_blocking(move || {
-                use diesel::Connection;
-                use diesel::pg::PgConnection;
                 let mut conn =
                     PgConnection::establish(&db_url).expect("Failed to connect for migrations");
                 conn.run_pending_migrations(MIGRATIONS)
@@ -77,13 +70,6 @@ impl Server {
         }
 
         // --- Dependency Injection ---
-        // let repositories = Arc::new(Repositories {
-        //     user_repository: UserRepository,
-        // });
-        // let services = Services {
-        //     user_service: UserService::new(Arc::clone(&repositories)),
-        //     auth_service: AuthService::new(Arc::clone(&repositories)),
-        // };
         let repositories = Arc::new(Repositories {});
         let services = Services {};
 
@@ -107,25 +93,35 @@ impl Server {
                 axum::http::header::CONTENT_TYPE,
                 axum::http::header::AUTHORIZATION,
             ]);
-        // Note : allow_credentials(true) est incompatible avec allow_origin(Any)
-        // En prod, remplace Any par ton domaine :
-        // .allow_origin("https://ton-domaine.com".parse::<HeaderValue>().unwrap())
-        // .allow_credentials(true)
+
+        // --- TraceLayer HTTP ---
+        // Contrôlable via RUST_LOG=tower_http=debug
+        let trace_layer = TraceLayer::new_for_http()
+            .on_request(())
+            .on_response(
+                DefaultOnResponse::new()
+                    .level(Level::INFO)
+                    .include_headers(false),
+            )
+            .on_failure(DefaultOnFailure::new().level(Level::ERROR));
 
         // --- Router ---
         let app = Router::new()
-            .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
+            .merge(utoipa_swagger_ui::SwaggerUi::new("/swagger-ui").url(
+                "/api-docs/openapi.json",
+                {
+                    use utoipa::OpenApi;
+                    crate::routes::swagger::ApiDoc::openapi()
+                },
+            ))
             .nest("/api", crate::routes::create_router(app_state))
             .layer(cors)
-            .layer(TraceLayer::new_for_http());
+            .layer(trace_layer);
 
         // --- Lancement ---
         let addr = format!("{}:{}", config.server.host, config.server.port);
-        tracing::info!(
-            "Server started at http://{} in {} mode 🚀",
-            addr,
-            config.server.environment
-        );
+        tracing::info!(address = %addr, "Server started 🚀");
+        tracing::info!(openapi_url = %format!("http://{}/swagger-ui", addr), "OpenAPI docs available at");
 
         let listener = tokio::net::TcpListener::bind(&addr).await?;
         serve(listener, app).await
