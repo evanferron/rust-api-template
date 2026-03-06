@@ -12,14 +12,6 @@ use tracing_subscriber::{
 ///
 /// Le niveau de log est contrôlable via la variable d'environnement `RUST_LOG`.
 /// Valeur par défaut : `info` pour l'app, `debug` pour tower_http (logs HTTP).
-///
-/// Exemples :
-/// ```
-/// RUST_LOG=debug                          # tout en debug
-/// RUST_LOG=info,tower_http=debug          # HTTP détaillé, reste en info
-/// RUST_LOG=info,diesel=debug              # requêtes SQL visibles
-/// RUST_LOG=info,tower_http=debug,diesel=debug  # HTTP + SQL
-/// ```
 pub fn init(environment: &str) {
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         // Par défaut : logs HTTP visibles, SQL masqué sauf si explicitement demandé

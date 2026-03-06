@@ -76,3 +76,42 @@ pub struct RefreshResponse {
     pub expires_in: u32,
     pub token_type: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use validator::Validate;
+
+    #[test]
+    fn test_register_valid() {
+        let req = RegisterRequest {
+            email: "evan@example.com".to_string(),
+            password: "securepass".to_string(),
+            first_name: "Evan".to_string(),
+            last_name: "Ferron".to_string(),
+        };
+        assert!(req.validate().is_ok());
+    }
+
+    #[test]
+    fn test_register_invalid_email() {
+        let req = RegisterRequest {
+            email: "not-an-email".to_string(),
+            password: "securepass".to_string(),
+            first_name: "Evan".to_string(),
+            last_name: "Ferron".to_string(),
+        };
+        assert!(req.validate().is_err());
+    }
+
+    #[test]
+    fn test_register_password_too_short() {
+        let req = RegisterRequest {
+            email: "evan@example.com".to_string(),
+            password: "short".to_string(),
+            first_name: "Evan".to_string(),
+            last_name: "Ferron".to_string(),
+        };
+        assert!(req.validate().is_err());
+    }
+}

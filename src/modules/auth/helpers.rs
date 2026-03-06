@@ -60,10 +60,12 @@ pub fn create_token(user_id: Uuid, secret: &str, expiration: u32) -> Result<Stri
 /// Vérifie et décode un access token JWT.
 /// Retourne les `Claims` si le token est valide et non expiré.
 pub fn verify_token(token: &str, secret: &str) -> Result<Claims, ApiError> {
+    let mut validation = Validation::default();
+    validation.leeway = 0;
     let token_data: TokenData<Claims> = decode(
         token,
         &DecodingKey::from_secret(secret.as_bytes()),
-        &Validation::default(),
+        &validation,
     )
     .map_err(|e| match e.kind() {
         jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
@@ -107,10 +109,13 @@ pub fn create_refresh_token(
 
 /// Vérifie et décode un refresh token JWT.
 pub fn verify_refresh_token(token: &str, secret: &str) -> Result<RefreshClaims, ApiError> {
+    let mut validation = Validation::default();
+    validation.leeway = 0;
+
     let token_data: TokenData<RefreshClaims> = decode(
         token,
         &DecodingKey::from_secret(secret.as_bytes()),
-        &Validation::default(),
+        &validation,
     )
     .map_err(|e| match e.kind() {
         jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
@@ -124,4 +129,46 @@ pub fn verify_refresh_token(token: &str, secret: &str) -> Result<RefreshClaims, 
     })?;
 
     Ok(token_data.claims)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_create_and_verify_token() {
+        let user_id = uuid::Uuid::new_v4();
+        let token = create_token(user_id, "secret", 3600).unwrap();
+        let claims = verify_token(&token, "secret").unwrap();
+        assert_eq!(claims.sub, user_id);
+    }
+
+    #[test]
+    fn test_verify_token_wrong_secret() {
+        let token = create_token(uuid::Uuid::new_v4(), "secret", 3600).unwrap();
+        assert!(verify_token(&token, "wrong_secret").is_err());
+    }
+
+    #[test]
+    fn test_verify_expired_token() {
+        use chrono::Utc;
+        use jsonwebtoken::{EncodingKey, Header, encode};
+
+        // Crée manuellement un token avec exp dans le passé
+        let claims = Claims {
+            sub: uuid::Uuid::new_v4(),
+            iat: Utc::now().timestamp() - 3600,
+            exp: Utc::now().timestamp() - 1800, // expiré il y a 30 minutes
+        };
+
+        let token = encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret("secret".as_bytes()),
+        )
+        .unwrap();
+
+        let err = verify_token(&token, "secret").unwrap_err();
+        assert!(matches!(err, ApiError::Authentication(_)));
+    }
 }

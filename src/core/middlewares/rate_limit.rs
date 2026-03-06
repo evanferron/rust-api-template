@@ -55,11 +55,14 @@ impl RateLimitStore {
 /// Recommandé : 10-20 requêtes/minute pour les routes d'auth.
 pub async fn rate_limit_by_ip(
     State(state): State<AppState>,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     req: Request,
     next: Next,
 ) -> Result<Response, ApiError> {
-    let ip = addr.ip();
+    let ip = req
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|c| c.0.ip())
+        .unwrap_or_else(|| std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST));
 
     state.rate_limit.by_ip.check_key(&ip).map_err(|_| {
         tracing::warn!(ip = %ip, "Rate limit exceeded (IP)");

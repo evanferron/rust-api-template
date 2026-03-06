@@ -14,20 +14,6 @@ use crate::modules::auth::helpers::verify_token;
 /// Extrait et valide le Bearer token depuis le header Authorization,
 /// puis injecte les claims dans les extensions de la requête
 /// pour qu'ils soient disponibles dans les handlers via `Extension<Claims>`.
-///
-/// Usage dans les routes :
-/// ```rust
-/// Router::new()
-///     .route("/users", get(handler))
-///     .route_layer(axum::middleware::from_fn_with_state(state, require_auth))
-/// ```
-///
-/// Récupération des claims dans un handler :
-/// ```rust
-/// pub async fn handler(
-///     Extension(claims): Extension<Claims>,
-/// ) -> Result<Json<...>, ApiError> { ... }
-/// ```
 pub async fn require_auth(
     State(state): State<AppState>,
     mut req: Request,
