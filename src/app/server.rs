@@ -1,14 +1,16 @@
 use crate::app::config::Config;
 use crate::app::models::{AppState, Repositories, Services};
 use crate::core::logger;
+use crate::core::middlewares::rate_limit::RateLimitStore;
 use axum::BoxError;
+use axum::Router;
 use axum::error_handling::HandleErrorLayer;
 use axum::extract::MatchedPath;
 use axum::http::{HeaderValue, StatusCode};
-use axum::{Router, serve};
 use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::bb8::Pool;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tower::ServiceBuilder;
@@ -79,12 +81,17 @@ impl Server {
         // --- Dependency Injection ---
         let repositories = Arc::new(Repositories {});
         let services = Services {};
+        let rate_limit = RateLimitStore::new(
+            10,  // 10 req/min sur les routes auth (login, register, refresh)
+            120, // 120 req/min sur les routes protégées
+        );
 
         let app_state = AppState {
             pool,
             config: config.clone(),
             services,
             repositories,
+            rate_limit,
         };
 
         // --- CORS ---
@@ -161,6 +168,10 @@ impl Server {
         tracing::info!(openapi_url = %format!("http://{}/swagger-ui", addr), "OpenAPI docs available at");
 
         let listener = tokio::net::TcpListener::bind(&addr).await?;
-        serve(listener, app).await
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
     }
 }

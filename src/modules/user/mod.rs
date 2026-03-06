@@ -1,5 +1,5 @@
-use crate::app::models::AppState;
 use crate::core::middlewares::auth::require_auth;
+use crate::{app::models::AppState, core::middlewares::rate_limit::rate_limit_by_user};
 use axum::{
     Router,
     routing::{delete, get, put},
@@ -17,6 +17,10 @@ pub fn routes(state: AppState) -> Router {
         .route("/users/{id}", get(handler::get_by_id))
         .route("/users/{id}", put(handler::update))
         .route("/users/{id}", delete(handler::delete))
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            rate_limit_by_user,
+        ))
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             require_auth,

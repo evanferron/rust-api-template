@@ -1,4 +1,5 @@
 use crate::app::models::AppState;
+use crate::core::middlewares::rate_limit::rate_limit_by_ip;
 use axum::{Router, routing::post};
 
 pub mod dto;
@@ -12,5 +13,9 @@ pub fn routes(state: AppState) -> Router {
         .route("/auth/register", post(handler::register))
         .route("/auth/login", post(handler::login))
         .route("/auth/refresh", post(handler::refresh))
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            rate_limit_by_ip,
+        ))
         .with_state(state)
 }

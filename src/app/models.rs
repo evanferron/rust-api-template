@@ -1,4 +1,5 @@
 use crate::app::config::Config;
+use crate::core::middlewares::rate_limit::RateLimitStore;
 use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::bb8::Pool;
 use serde::Deserialize;
@@ -34,6 +35,7 @@ pub struct AppState {
     pub config: Config,
     pub services: Services,
     pub repositories: Arc<Repositories>,
+    pub rate_limit: RateLimitStore,
 }
 
 #[derive(Clone)]
