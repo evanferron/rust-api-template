@@ -18,6 +18,7 @@ use crate::modules::user::dto::{UpdateUserRequest, UserResponse};
         crate::modules::user::handler::get_by_id,
         crate::modules::user::handler::update,
         crate::modules::user::handler::delete,
+        crate::modules::auth::handler::logout
     ),
     components(
         schemas(

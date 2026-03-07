@@ -13,6 +13,7 @@ pub fn routes(state: AppState) -> Router {
         .route("/auth/register", post(handler::register))
         .route("/auth/login", post(handler::login))
         .route("/auth/refresh", post(handler::refresh))
+        .route("/auth/logout", post(handler::logout))
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             rate_limit_by_ip,

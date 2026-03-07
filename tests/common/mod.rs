@@ -10,7 +10,7 @@ use diesel_async::pooled_connection::bb8::Pool;
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use tokio::sync::OnceCell;
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 static DB_LOCK: Mutex<()> = Mutex::new(());
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
@@ -74,7 +74,7 @@ pub async fn build_test_app() -> Router {
 
     let state = AppState {
         pool,
-        config,
+        config: Arc::new(config),
         rate_limit: RateLimitStore::new(1000, 1000), // limites hautes pour ne pas bloquer les tests
     };
 

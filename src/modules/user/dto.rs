@@ -39,7 +39,7 @@ impl From<User> for UserResponse {
 // ---------------------------------------------------------------------------
 
 /// Tous les champs sont optionnels — seuls les champs fournis sont mis à jour.
-#[derive(Debug, Deserialize, ToSchema, Validate)]
+#[derive(Deserialize, ToSchema, Validate)]
 #[serde(deny_unknown_fields)]
 #[validate(schema(function = "validate_password_change"))]
 pub struct UpdateUserRequest {

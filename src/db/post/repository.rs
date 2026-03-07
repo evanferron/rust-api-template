@@ -3,6 +3,7 @@ use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
 use crate::core::errors::ApiError;
+use crate::core::repository::PaginationParams;
 use crate::db::post::model::{NewPost, Post, PostChangeset};
 use crate::db::schema::posts::dsl;
 use crate::db::user::model::User;
@@ -43,6 +44,21 @@ impl PostRepository {
             .filter(dsl::user_id.eq(user_id))
             .filter(dsl::published.eq(true))
             .order(dsl::created_at.desc())
+            .load::<Post>(conn)
+            .await
+            .map_err(ApiError::from)
+    }
+
+    pub async fn find_paginated_by_user(
+        conn: &mut AsyncPgConnection,
+        user_id: Uuid,
+        params: PaginationParams,
+    ) -> Result<Vec<Post>, ApiError> {
+        dsl::posts
+            .filter(dsl::user_id.eq(user_id))
+            .order(dsl::created_at.desc())
+            .limit(params.per_page)
+            .offset(params.offset())
             .load::<Post>(conn)
             .await
             .map_err(ApiError::from)

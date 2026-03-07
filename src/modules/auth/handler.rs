@@ -108,3 +108,24 @@ pub async fn refresh(
 
     Ok((jar.add(cookie), Json(response)))
 }
+
+#[utoipa::path(
+    post,
+    path = "/api/auth/logout",
+    tag = "auth",
+    responses(
+        (status = 204, description = "Déconnexion réussie — cookie supprimé"),
+        (status = 401, description = "Non authentifié", body = ErrorResponse),
+    )
+)]
+pub async fn logout(jar: CookieJar) -> impl IntoResponse {
+    let cookie = Cookie::build(("refresh_token", ""))
+        .http_only(true)
+        .secure(!cfg!(debug_assertions))
+        .same_site(SameSite::Strict)
+        .path("/api/auth/refresh")
+        .max_age(Duration::seconds(0))
+        .build();
+
+    (jar.add(cookie), StatusCode::NO_CONTENT)
+}

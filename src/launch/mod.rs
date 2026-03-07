@@ -15,6 +15,7 @@ use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::bb8::Pool;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 use tower::ServiceBuilder;
 use tower::timeout::TimeoutLayer;
@@ -83,7 +84,7 @@ impl Server {
 
         let app_state = AppState {
             pool,
-            config: config.clone(),
+            config: Arc::new(config.clone()),
             rate_limit: RateLimitStore::new(
                 10,  // 10 req/min sur les routes auth (login, register, refresh)
                 120, // 120 req/min sur les routes protégées

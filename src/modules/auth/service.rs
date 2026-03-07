@@ -7,8 +7,8 @@ use crate::db::user::repository::UserRepository;
 use crate::infra::config::Config;
 use crate::modules::auth::dto::{LoginRequest, LoginResponse, RefreshResponse, RegisterRequest};
 use crate::modules::auth::helpers::{create_refresh_token, create_token, verify_refresh_token};
+use crate::modules::auth::helpers::{hash_password, verify_password};
 use crate::modules::user::dto::UserResponse;
-
 // ---------------------------------------------------------------------------
 // Register
 // ---------------------------------------------------------------------------
@@ -99,33 +99,4 @@ pub fn refresh(
         },
         new_refresh_token,
     ))
-}
-
-// ---------------------------------------------------------------------------
-// Helpers bcrypt
-// ---------------------------------------------------------------------------
-
-async fn hash_password(password: &str) -> Result<String, ApiError> {
-    let password = password.to_string();
-    let cost = if cfg!(debug_assertions) { 4 } else { 12 };
-    tokio::task::spawn_blocking(move || bcrypt::hash(&password, cost))
-        .await
-        .map_err(|e| ApiError::InternalServer(e.to_string()))?
-        .map_err(|e| ApiError::InternalServer(format!("Failed to hash password: {}", e)))
-}
-
-async fn verify_password(password: &str, hash: &str) -> Result<(), ApiError> {
-    let password = password.to_string();
-    let hash = hash.to_string();
-    let valid = tokio::task::spawn_blocking(move || bcrypt::verify(&password, &hash))
-        .await
-        .map_err(|e| ApiError::InternalServer(e.to_string()))?
-        .map_err(|e| ApiError::InternalServer(format!("Failed to verify password: {}", e)))?;
-
-    if !valid {
-        return Err(ApiError::Authentication(
-            "Invalid email or password".to_string(),
-        ));
-    }
-    Ok(())
 }

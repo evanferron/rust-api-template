@@ -28,16 +28,16 @@ fn print_usage() {
 scaffold — Générateur de modules pour rust-api-template
 
 USAGE:
-    cargo run --bin scaffold -- <COMMANDE> <NOM>
+    cargo run --bin generate -- <COMMANDE> <NOM>
 
 COMMANDES:
     generate, g    Génère un nouveau module
     delete,   d    Supprime un module existant
 
 EXEMPLES:
-    cargo run --bin scaffold -- generate invoice
-    cargo run --bin scaffold -- generate blog_post
-    cargo run --bin scaffold -- delete invoice
+    cargo run --bin generate -- generate invoice
+    cargo run --bin generate -- generate blog_post
+    cargo run --bin generate -- delete invoice
 
 Le nom est automatiquement converti :
     snake_case  → pour les fichiers et modules Rust  (ex: blog_post)
@@ -56,7 +56,6 @@ fn generate(name: &str) {
 
     println!("\n🚀 Génération du module \"{}\"...\n", module.snake);
 
-    // Vérifie que les dossiers parent existent
     check_project_structure();
 
     let files = vec![
@@ -69,14 +68,15 @@ fn generate(name: &str) {
             format!("src/db/{}/repository.rs", module.snake),
             template_repository(&module),
         ),
-        (
-            format!("src/db/{}/mod.rs", module.snake),
-            template_db_mod(&module),
-        ),
+        (format!("src/db/{}/mod.rs", module.snake), template_db_mod()),
         // Module layer
         (
             format!("src/modules/{}/dto.rs", module.snake),
             template_dto(&module),
+        ),
+        (
+            format!("src/modules/{}/params.rs", module.snake),
+            template_params(&module),
         ),
         (
             format!("src/modules/{}/service.rs", module.snake),
@@ -93,7 +93,7 @@ fn generate(name: &str) {
         // Migration
         (
             format!(
-                "migrations/{}_create_{}/up.sql",
+                "migrations/{}_create_{}s/up.sql",
                 chrono_prefix(),
                 module.snake
             ),
@@ -101,7 +101,7 @@ fn generate(name: &str) {
         ),
         (
             format!(
-                "migrations/{}_create_{}/down.sql",
+                "migrations/{}_create_{}s/down.sql",
                 chrono_prefix(),
                 module.snake
             ),
@@ -121,7 +121,6 @@ fn generate(name: &str) {
             continue;
         }
 
-        // Crée les dossiers parents si nécessaire
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)
                 .unwrap_or_else(|e| panic!("Impossible de créer {}: {}", parent.display(), e));
@@ -187,14 +186,12 @@ fn check_project_structure() {
 }
 
 fn chrono_prefix() -> String {
-    // Format : YYYY-MM-DD-HHmmss
     use std::time::{SystemTime, UNIX_EPOCH};
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
 
-    // Conversion manuelle (pas de dépendance chrono dans le bin)
     let (y, mo, d, h, mi, s) = unix_to_datetime(secs);
     format!("{:04}-{:02}-{:02}-{:02}{:02}{:02}", y, mo, d, h, mi, s)
 }
@@ -222,7 +219,7 @@ fn unix_to_datetime(mut secs: u64) -> (u64, u64, u64, u64, u64, u64) {
 fn print_next_steps(module: &ModuleNames) {
     println!("📋 Étapes suivantes :\n");
     println!(
-        "  1. Complète la migration  migrations/*_create_{}/up.sql",
+        "  1. Complète la migration  migrations/*_create_{}s/up.sql",
         module.snake
     );
     println!("     Lance : diesel migration run\n");
@@ -239,6 +236,14 @@ fn print_next_steps(module: &ModuleNames) {
         "  5. Branche les routes dans src/launch/router.rs :\n     .merge({}::routes(state.clone()))\n",
         module.snake
     );
+    println!(
+        "  6. Ajoute les paths utoipa dans src/launch/swagger.rs :\n     crate::modules::{}::handler::get_all,\n     crate::modules::{}::handler::get_by_id,\n     crate::modules::{}::handler::create,\n     crate::modules::{}::handler::update,\n     crate::modules::{}::handler::delete,\n",
+        module.snake, module.snake, module.snake, module.snake, module.snake
+    );
+    println!(
+        "  7. Ajoute les schemas utoipa dans src/launch/swagger.rs :\n     {}Response,\n     Create{}Request,\n     Update{}Request,\n",
+        module.pascal, module.pascal, module.pascal
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -246,13 +251,9 @@ fn print_next_steps(module: &ModuleNames) {
 // ---------------------------------------------------------------------------
 
 struct ModuleNames {
-    /// snake_case  — utilisé pour les modules, fichiers, colonnes DB
     snake: String,
-    /// PascalCase  — utilisé pour les structs Rust
     pascal: String,
-    /// kebab-case  — utilisé pour les noms de migration Diesel
     kebab: String,
-    /// SCREAMING_SNAKE — utilisé pour les constantes
     #[allow(dead_code)]
     upper: String,
 }
@@ -273,7 +274,6 @@ impl ModuleNames {
 }
 
 fn to_snake(input: &str) -> String {
-    // Accepte snake_case, PascalCase, kebab-case en entrée
     let s = input.replace('-', "_");
     let mut result = String::new();
     for (i, ch) in s.chars().enumerate() {
@@ -323,12 +323,24 @@ pub struct {pascal} {{
 }}
 
 /// Modèle pour les insertions (INSERT INTO).
+/// Ne contient pas created_at / updated_at — gérés par la DB.
 #[derive(Debug, Insertable)]
 #[diesel(table_name = crate::db::schema::{snake}s)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct New{pascal} {{
     pub id: Uuid,
     pub user_id: Uuid,
     // TODO: ajoute tes champs ici
+}}
+
+/// Modèle pour les mises à jour partielles (UPDATE).
+/// Tous les champs sont optionnels — seuls les champs Some sont mis à jour.
+#[derive(Debug, AsChangeset)]
+#[diesel(table_name = crate::db::schema::{snake}s)]
+pub struct {pascal}Changeset {{
+    // TODO: ajoute les champs modifiables
+    // Exemple :
+    // pub title: Option<String>,
 }}
 "#,
         snake = m.snake,
@@ -343,20 +355,19 @@ use diesel_async::{{AsyncPgConnection, RunQueryDsl}};
 use uuid::Uuid;
 
 use crate::core::errors::ApiError;
-use crate::db::{snake}::model::{{New{pascal}, {pascal}}};
+use crate::db::{snake}::model::{{New{pascal}, {pascal}, {pascal}Changeset}};
 use crate::db::schema::{snake}s::dsl;
-use crate::modules::{snake}::dto::{{Create{pascal}Request, Update{pascal}Request}};
 
 // ---------------------------------------------------------------------------
 // Macros génériques
 // ---------------------------------------------------------------------------
 
+pub struct {pascal}Repository;
+
 crate::impl_base_repository!({pascal}Repository, {pascal}, crate::db::schema::{snake}s, Uuid);
 crate::impl_exists!({pascal}Repository, crate::db::schema::{snake}s, Uuid);
 crate::impl_count!({pascal}Repository, crate::db::schema::{snake}s);
 crate::impl_find_paginated!({pascal}Repository, {pascal}, crate::db::schema::{snake}s, created_at);
-
-pub struct {pascal}Repository;
 
 // ---------------------------------------------------------------------------
 // Méthodes spécifiques à {pascal}
@@ -375,49 +386,49 @@ impl {pascal}Repository {{
             .map_err(ApiError::from)
     }}
 
-    pub async fn create(
+    pub async fn find_paginated_by_user(
         conn: &mut AsyncPgConnection,
         user_id: Uuid,
-        payload: Create{pascal}Request,
-    ) -> Result<{pascal}, ApiError> {{
-        let new = New{pascal} {{
-            id: Uuid::new_v4(),
-            user_id,
-            // TODO: mappe les champs du payload
-        }};
+        params: crate::core::pagination::PaginationParams,
+    ) -> Result<Vec<{pascal}>, ApiError> {{
+        dsl::{snake}s
+            .filter(dsl::user_id.eq(user_id))
+            .order(dsl::created_at.desc())
+            .limit(params.per_page)
+            .offset(params.offset())
+            .load::<{pascal}>(conn)
+            .await
+            .map_err(ApiError::from)
+    }}
 
+    /// Insère un nouvel enregistrement.
+    /// La construction de New{pascal} est à la charge du service.
+    pub async fn create(
+        conn: &mut AsyncPgConnection,
+        new_item: New{pascal},
+    ) -> Result<{pascal}, ApiError> {{
         diesel::insert_into(dsl::{snake}s)
-            .values(&new)
+            .values(&new_item)
             .returning({pascal}::as_returning())
             .get_result::<{pascal}>(conn)
             .await
             .map_err(ApiError::from)
     }}
 
+    /// Met à jour un enregistrement existant.
+    /// La construction de {pascal}Changeset est à la charge du service.
     pub async fn update(
         conn: &mut AsyncPgConnection,
         id: Uuid,
-        payload: Update{pascal}Request,
+        changeset: {pascal}Changeset,
     ) -> Result<{pascal}, ApiError> {{
         diesel::update(dsl::{snake}s.find(id))
-            .set(&{pascal}Changeset {{
-                // TODO: mappe les champs du payload
-            }})
+            .set(&changeset)
             .returning({pascal}::as_returning())
             .get_result::<{pascal}>(conn)
             .await
             .map_err(ApiError::from)
     }}
-}}
-
-// ---------------------------------------------------------------------------
-// Changeset interne
-// ---------------------------------------------------------------------------
-
-#[derive(diesel::AsChangeset)]
-#[diesel(table_name = crate::db::schema::{snake}s)]
-struct {pascal}Changeset {{
-    // TODO: ajoute les champs modifiables
 }}
 "#,
         snake = m.snake,
@@ -425,8 +436,8 @@ struct {pascal}Changeset {{
     )
 }
 
-fn template_db_mod(_m: &ModuleNames) -> String {
-    format!("pub mod model;\npub mod repository;\n",)
+fn template_db_mod() -> String {
+    "pub mod model;\npub mod repository;\n".to_string()
 }
 
 fn template_dto(m: &ModuleNames) -> String {
@@ -468,7 +479,7 @@ impl From<{pascal}> for {pascal}Response {{
 // Create
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Deserialize, ToSchema, Validate)]
+#[derive(Deserialize, ToSchema, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct Create{pascal}Request {{
     // TODO: ajoute les champs de création avec leurs validations
@@ -481,7 +492,7 @@ pub struct Create{pascal}Request {{
 // Update
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Deserialize, ToSchema, Validate)]
+#[derive(Deserialize, ToSchema, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct Update{pascal}Request {{
     // TODO: ajoute les champs modifiables (tous Option<T>)
@@ -495,20 +506,54 @@ pub struct Update{pascal}Request {{
     )
 }
 
+fn template_params(m: &ModuleNames) -> String {
+    format!(
+        r#"use serde::Deserialize;
+use uuid::Uuid;
+use validator::Validate;
+
+// ---------------------------------------------------------------------------
+// Path params
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize, Validate)]
+pub struct {pascal}IdParams {{
+    pub id: Uuid,
+}}
+
+// ---------------------------------------------------------------------------
+// Query params
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize, Validate)]
+pub struct {pascal}Query {{
+    #[validate(range(min = 1))]
+    pub page: Option<i64>,
+    #[validate(range(min = 1, max = 100))]
+    pub per_page: Option<i64>,
+}}
+"#,
+        pascal = m.pascal,
+    )
+}
+
 fn template_service(m: &ModuleNames) -> String {
     format!(
         r#"use diesel_async::AsyncPgConnection;
 use uuid::Uuid;
 
 use crate::core::errors::ApiError;
+use crate::core::pagination::PaginationParams;
+use crate::db::{snake}::model::{{New{pascal}, {pascal}Changeset}};
 use crate::db::{snake}::repository::{pascal}Repository;
 use crate::modules::{snake}::dto::{{Create{pascal}Request, {pascal}Response, Update{pascal}Request}};
 
 pub async fn get_all_by_user(
     conn: &mut AsyncPgConnection,
     user_id: Uuid,
+    params: PaginationParams,
 ) -> Result<Vec<{pascal}Response>, ApiError> {{
-    let items = {pascal}Repository::find_by_user_id(conn, user_id).await?;
+    let items = {pascal}Repository::find_paginated_by_user(conn, user_id, params).await?;
     Ok(items.into_iter().map({pascal}Response::from).collect())
 }}
 
@@ -527,8 +572,12 @@ pub async fn create(
     user_id: Uuid,
     payload: Create{pascal}Request,
 ) -> Result<{pascal}Response, ApiError> {{
-    let item = {pascal}Repository::create(conn, user_id, payload).await?;
-    Ok({pascal}Response::from(item))
+    let new_item = New{pascal} {{
+        id: Uuid::new_v4(),
+        user_id,
+        // TODO: mappe les champs du payload
+    }};
+    Ok({pascal}Response::from({pascal}Repository::create(conn, new_item).await?))
 }}
 
 pub async fn update(
@@ -547,8 +596,10 @@ pub async fn update(
         ));
     }}
 
-    let updated = {pascal}Repository::update(conn, id, payload).await?;
-    Ok({pascal}Response::from(updated))
+    let changeset = {pascal}Changeset {{
+        // TODO: mappe les champs du payload
+    }};
+    Ok({pascal}Response::from({pascal}Repository::update(conn, id, changeset).await?))
 }}
 
 pub async fn delete(
@@ -579,21 +630,26 @@ fn template_handler(m: &ModuleNames) -> String {
     format!(
         r#"use axum::{{
     Extension, Json,
-    extract::{{Path, State}},
+    extract::State,
     http::StatusCode,
 }};
-use uuid::Uuid;
 
-use crate::bootstrap::models::AppState;
 use crate::core::errors::{{ApiError, ErrorResponse}};
-use crate::core::extractor::ValidatedJson;
+use crate::core::pagination::PaginationParams;
+use crate::core::validator::{{ValidatedJson, ValidatedPath, ValidatedQuery}};
+use crate::infra::state::AppState;
 use crate::modules::auth::helpers::Claims;
 use crate::modules::{snake}::dto::{{Create{pascal}Request, {pascal}Response, Update{pascal}Request}};
+use crate::modules::{snake}::params::{{  {pascal}IdParams, {pascal}Query}};
 use crate::modules::{snake}::service;
 
 #[utoipa::path(
     get, path = "/api/{kebab}s", tag = "{snake}s",
     security(("bearer_auth" = [])),
+    params(
+        ("page" = Option<i64>, Query, description = "Numéro de page (défaut: 1)"),
+        ("per_page" = Option<i64>, Query, description = "Éléments par page (défaut: 20, max: 100)"),
+    ),
     responses(
         (status = 200, body = Vec<{pascal}Response>),
         (status = 401, body = ErrorResponse),
@@ -602,17 +658,23 @@ use crate::modules::{snake}::service;
 pub async fn get_all(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
+    ValidatedQuery(query): ValidatedQuery<{pascal}Query>,
 ) -> Result<Json<Vec<{pascal}Response>>, ApiError> {{
+    let params = PaginationParams::new(
+        query.page.unwrap_or(1),
+        query.per_page.unwrap_or(20),
+    );
     let mut conn = state.pool.get().await.map_err(ApiError::from)?;
-    Ok(Json(service::get_all_by_user(&mut conn, claims.sub).await?))
+    Ok(Json(service::get_all_by_user(&mut conn, claims.sub, params).await?))
 }}
 
 #[utoipa::path(
     get, path = "/api/{kebab}s/{{id}}", tag = "{snake}s",
     security(("bearer_auth" = [])),
-    params(("id" = Uuid, Path, description = "UUID du {snake}")),
+    params(("id" = uuid::Uuid, Path, description = "UUID du {snake}")),
     responses(
         (status = 200, body = {pascal}Response),
+        (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
     )
@@ -620,10 +682,10 @@ pub async fn get_all(
 pub async fn get_by_id(
     State(state): State<AppState>,
     Extension(_claims): Extension<Claims>,
-    Path(id): Path<Uuid>,
+    ValidatedPath(params): ValidatedPath<{pascal}IdParams>,
 ) -> Result<Json<{pascal}Response>, ApiError> {{
     let mut conn = state.pool.get().await.map_err(ApiError::from)?;
-    Ok(Json(service::get_by_id(&mut conn, id).await?))
+    Ok(Json(service::get_by_id(&mut conn, params.id).await?))
 }}
 
 #[utoipa::path(
@@ -649,7 +711,7 @@ pub async fn create(
 #[utoipa::path(
     put, path = "/api/{kebab}s/{{id}}", tag = "{snake}s",
     security(("bearer_auth" = [])),
-    params(("id" = Uuid, Path, description = "UUID du {snake}")),
+    params(("id" = uuid::Uuid, Path, description = "UUID du {snake}")),
     request_body = Update{pascal}Request,
     responses(
         (status = 200, body = {pascal}Response),
@@ -662,19 +724,20 @@ pub async fn create(
 pub async fn update(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
-    Path(id): Path<Uuid>,
+    ValidatedPath(params): ValidatedPath<{pascal}IdParams>,
     ValidatedJson(payload): ValidatedJson<Update{pascal}Request>,
 ) -> Result<Json<{pascal}Response>, ApiError> {{
     let mut conn = state.pool.get().await.map_err(ApiError::from)?;
-    Ok(Json(service::update(&mut conn, id, claims.sub, payload).await?))
+    Ok(Json(service::update(&mut conn, params.id, claims.sub, payload).await?))
 }}
 
 #[utoipa::path(
     delete, path = "/api/{kebab}s/{{id}}", tag = "{snake}s",
     security(("bearer_auth" = [])),
-    params(("id" = Uuid, Path, description = "UUID du {snake}")),
+    params(("id" = uuid::Uuid, Path, description = "UUID du {snake}")),
     responses(
         (status = 204, description = "{pascal} supprimé"),
+        (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
         (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
@@ -683,10 +746,10 @@ pub async fn update(
 pub async fn delete(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
-    Path(id): Path<Uuid>,
+    ValidatedPath(params): ValidatedPath<{pascal}IdParams>,
 ) -> Result<StatusCode, ApiError> {{
     let mut conn = state.pool.get().await.map_err(ApiError::from)?;
-    service::delete(&mut conn, id, claims.sub).await?;
+    service::delete(&mut conn, params.id, claims.sub).await?;
     Ok(StatusCode::NO_CONTENT)
 }}
 "#,
@@ -699,28 +762,25 @@ pub async fn delete(
 fn template_module_mod(m: &ModuleNames) -> String {
     format!(
         r#"use axum::{{Router, routing::{{delete, get, post, put}}}};
-use crate::bootstrap::models::AppState;
+use axum::middleware::from_fn_with_state;
+
 use crate::core::middlewares::auth::require_auth;
 use crate::core::middlewares::rate_limit::rate_limit_by_user;
+use crate::infra::state::AppState;
 
 pub mod dto;
 pub mod handler;
+pub mod params;
 pub mod service;
 
 pub fn routes(state: AppState) -> Router {{
     Router::new()
-        .route("/{kebab}s",      get(handler::get_all).post(handler::create))
-        .route("/{kebab}s/{{id}}", get(handler::get_by_id))
-        .route("/{kebab}s/{{id}}", put(handler::update))
-        .route("/{kebab}s/{{id}}", delete(handler::delete))
-        .route_layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            rate_limit_by_user,
-        ))
-        .route_layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            require_auth,
-        ))
+        .route("/{kebab}s",        get(handler::get_all).post(handler::create))
+        .route("/{kebab}s/{{id}}", get(handler::get_by_id)
+            .put(handler::update)
+            .delete(handler::delete))
+        .route_layer(from_fn_with_state(state.clone(), rate_limit_by_user))
+        .route_layer(from_fn_with_state(state.clone(), require_auth))
         .with_state(state)
 }}
 "#,

@@ -4,6 +4,7 @@ use uuid::Uuid;
 use crate::core::errors::ApiError;
 use crate::db::user::model::UserChangeset;
 use crate::db::user::repository::UserRepository;
+use crate::modules::auth::helpers::{hash_password, verify_password};
 use crate::modules::user::dto::{UpdateUserRequest, UserResponse};
 
 pub async fn get_all(conn: &mut AsyncPgConnection) -> Result<Vec<UserResponse>, ApiError> {
@@ -29,25 +30,8 @@ pub async fn update(
 
     let new_password = match (&payload.new_password, &payload.current_password) {
         (Some(new_pwd), Some(current_pwd)) => {
-            let current_pwd = current_pwd.clone();
-            let hash = user.password.clone();
-            let valid = tokio::task::spawn_blocking(move || bcrypt::verify(&current_pwd, &hash))
-                .await
-                .map_err(|e| ApiError::InternalServer(e.to_string()))?
-                .map_err(|e| ApiError::InternalServer(e.to_string()))?;
-            if !valid {
-                return Err(ApiError::Authentication(
-                    "Current password is incorrect".to_string(),
-                ));
-            }
-            let new_pwd = new_pwd.clone();
-            let cost = if cfg!(debug_assertions) { 4 } else { 12 };
-            Some(
-                tokio::task::spawn_blocking(move || bcrypt::hash(&new_pwd, cost))
-                    .await
-                    .map_err(|e| ApiError::InternalServer(e.to_string()))?
-                    .map_err(|e| ApiError::InternalServer(e.to_string()))?,
-            )
+            verify_password(current_pwd, &user.password).await?;
+            Some(hash_password(new_pwd).await?)
         }
         (Some(_), None) => {
             return Err(ApiError::BadRequest(

@@ -2,6 +2,7 @@ use diesel_async::AsyncPgConnection;
 use uuid::Uuid;
 
 use crate::core::errors::ApiError;
+use crate::core::repository::PaginationParams;
 use crate::db::post::model::{NewPost, PostChangeset};
 use crate::db::post::repository::PostRepository;
 use crate::modules::post::dto::{CreatePostRequest, PostResponse, UpdatePostRequest};
@@ -9,8 +10,9 @@ use crate::modules::post::dto::{CreatePostRequest, PostResponse, UpdatePostReque
 pub async fn get_all_by_user(
     conn: &mut AsyncPgConnection,
     user_id: Uuid,
+    params: PaginationParams,
 ) -> Result<Vec<PostResponse>, ApiError> {
-    let posts = PostRepository::find_by_user_id(conn, user_id).await?;
+    let posts = PostRepository::find_paginated_by_user(conn, user_id, params).await?;
     Ok(posts.into_iter().map(PostResponse::from).collect())
 }
 

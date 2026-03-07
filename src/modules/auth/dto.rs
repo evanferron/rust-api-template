@@ -6,7 +6,7 @@ use validator::Validate;
 // Register
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Deserialize, ToSchema, Validate)]
+#[derive(Deserialize, ToSchema, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct RegisterRequest {
     /// Adresse email unique de l'utilisateur
@@ -46,7 +46,7 @@ pub struct RegisterRequest {
 // Login
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Deserialize, ToSchema, Validate)]
+#[derive(Deserialize, ToSchema, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct LoginRequest {
     #[schema(example = "evan@example.com")]
@@ -58,7 +58,7 @@ pub struct LoginRequest {
     pub password: String,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Serialize, ToSchema)]
 pub struct LoginResponse {
     pub access_token: String,
     /// Durée de vie de l'access token en secondes
@@ -70,7 +70,7 @@ pub struct LoginResponse {
 // Refresh
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Serialize, ToSchema)]
 pub struct RefreshResponse {
     pub access_token: String,
     pub expires_in: u32,

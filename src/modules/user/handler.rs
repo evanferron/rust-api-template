@@ -1,12 +1,10 @@
-use axum::{
-    Extension, Json,
-    extract::{Path, State},
-    http::StatusCode,
-};
-use uuid::Uuid;
+use axum::{Extension, Json, extract::State, http::StatusCode};
 
-use crate::core::errors::{ApiError, ErrorResponse};
-use crate::core::validator::ValidatedJson;
+use crate::core::{
+    errors::{ApiError, ErrorResponse},
+    validator::ValidatedPath,
+};
+use crate::core::{params::UuidParam, validator::ValidatedJson};
 use crate::modules::auth::helpers::Claims;
 use crate::modules::user::dto::{UpdateUserRequest, UserResponse};
 use crate::{infra::state::AppState, modules::user::service};
@@ -40,10 +38,10 @@ pub async fn get_all(
 pub async fn get_by_id(
     State(state): State<AppState>,
     Extension(_claims): Extension<Claims>,
-    Path(id): Path<Uuid>,
+    ValidatedPath(params): ValidatedPath<UuidParam>,
 ) -> Result<Json<UserResponse>, ApiError> {
     let mut conn = state.pool.get().await.map_err(ApiError::from)?;
-    Ok(Json(service::get_by_id(&mut conn, id).await?))
+    Ok(Json(service::get_by_id(&mut conn, params.id).await?))
 }
 
 #[utoipa::path(
@@ -62,16 +60,16 @@ pub async fn get_by_id(
 pub async fn update(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
-    Path(id): Path<Uuid>,
+    ValidatedPath(params): ValidatedPath<UuidParam>,
     ValidatedJson(payload): ValidatedJson<UpdateUserRequest>,
 ) -> Result<Json<UserResponse>, ApiError> {
-    if claims.sub != id {
+    if claims.sub != params.id {
         return Err(ApiError::Authorization(
             "You can only update your own profile".to_string(),
         ));
     }
     let mut conn = state.pool.get().await.map_err(ApiError::from)?;
-    Ok(Json(service::update(&mut conn, id, payload).await?))
+    Ok(Json(service::update(&mut conn, params.id, payload).await?))
 }
 
 #[utoipa::path(
@@ -88,14 +86,14 @@ pub async fn update(
 pub async fn delete(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
-    Path(id): Path<Uuid>,
+    ValidatedPath(params): ValidatedPath<UuidParam>,
 ) -> Result<StatusCode, ApiError> {
-    if claims.sub != id {
+    if claims.sub != params.id {
         return Err(ApiError::Authorization(
             "You can only delete your own account".to_string(),
         ));
     }
     let mut conn = state.pool.get().await.map_err(ApiError::from)?;
-    service::delete(&mut conn, id).await?;
+    service::delete(&mut conn, params.id).await?;
     Ok(StatusCode::NO_CONTENT)
 }

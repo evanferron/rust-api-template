@@ -1,31 +1,38 @@
-use axum::{
-    Extension, Json,
-    extract::{Path, State},
-    http::StatusCode,
-};
-use uuid::Uuid;
-
 use crate::core::errors::{ApiError, ErrorResponse};
-use crate::core::validator::ValidatedJson;
+use crate::core::params::{PaginationQuery, UuidParam};
+use crate::core::repository::PaginationParams;
+use crate::core::validator::{ValidatedJson, ValidatedPath, ValidatedQuery};
 use crate::infra::state::AppState;
 use crate::modules::auth::helpers::Claims;
 use crate::modules::post::dto::{CreatePostRequest, PostResponse, UpdatePostRequest};
 use crate::modules::post::service;
+use axum::{Extension, Json, extract::State, http::StatusCode};
 
 #[utoipa::path(
     get, path = "/api/posts", tag = "posts",
     security(("bearer_auth" = [])),
+    params(
+        ("page" = Option<i64>, Query, description = "Numéro de page (défaut: 1)"),
+        ("per_page" = Option<i64>, Query, description = "Éléments par page (défaut: 20, max: 100)"),
+    ),
     responses(
-        (status = 200, description = "Posts de l'utilisateur connecté", body = Vec<PostResponse>),
+        (status = 200, body = Vec<PostResponse>),
         (status = 401, body = ErrorResponse),
     )
 )]
 pub async fn get_all(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
+    ValidatedQuery(pagination): ValidatedQuery<PaginationQuery>,
 ) -> Result<Json<Vec<PostResponse>>, ApiError> {
+    let params = PaginationParams::new(
+        pagination.page.unwrap_or(1),
+        pagination.per_page.unwrap_or(20),
+    );
     let mut conn = state.pool.get().await.map_err(ApiError::from)?;
-    Ok(Json(service::get_all_by_user(&mut conn, claims.sub).await?))
+    Ok(Json(
+        service::get_all_by_user(&mut conn, claims.sub, params).await?,
+    ))
 }
 
 #[utoipa::path(
@@ -41,10 +48,10 @@ pub async fn get_all(
 pub async fn get_by_id(
     State(state): State<AppState>,
     Extension(_claims): Extension<Claims>,
-    Path(id): Path<Uuid>,
+    ValidatedPath(params): ValidatedPath<UuidParam>,
 ) -> Result<Json<PostResponse>, ApiError> {
     let mut conn = state.pool.get().await.map_err(ApiError::from)?;
-    Ok(Json(service::get_by_id(&mut conn, id).await?))
+    Ok(Json(service::get_by_id(&mut conn, params.id).await?))
 }
 
 #[utoipa::path(
@@ -83,12 +90,12 @@ pub async fn create(
 pub async fn update(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
-    Path(id): Path<Uuid>,
+    ValidatedPath(params): ValidatedPath<UuidParam>,
     ValidatedJson(payload): ValidatedJson<UpdatePostRequest>,
 ) -> Result<Json<PostResponse>, ApiError> {
     let mut conn = state.pool.get().await.map_err(ApiError::from)?;
     Ok(Json(
-        service::update(&mut conn, id, claims.sub, payload).await?,
+        service::update(&mut conn, params.id, claims.sub, payload).await?,
     ))
 }
 
@@ -106,9 +113,9 @@ pub async fn update(
 pub async fn delete(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
-    Path(id): Path<Uuid>,
+    ValidatedPath(params): ValidatedPath<UuidParam>,
 ) -> Result<StatusCode, ApiError> {
     let mut conn = state.pool.get().await.map_err(ApiError::from)?;
-    service::delete(&mut conn, id, claims.sub).await?;
+    service::delete(&mut conn, params.id, claims.sub).await?;
     Ok(StatusCode::NO_CONTENT)
 }
