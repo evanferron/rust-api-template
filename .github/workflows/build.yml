@@ -68,19 +68,18 @@ jobs:
         run: cargo llvm-cov --all -- --test-threads=1
 
       - name: Generate coverage reports
-        run: cargo llvm-cov report --lcov --output-path lcov.info
+        run: cargo llvm-cov report --cobertura --output-path coverage.xml
       
-      - name: Debug — vérifie que lcov.info existe
+      - name: Debug — vérifie que coverage.xml existe
         run: |
-          pwd
-          ls -la lcov.info
-          wc -l lcov.info
+          ls -la coverage.xml
+          head -5 coverage.xml
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v6
         with:
           args: >
-            -Dsonar.lcov.reportPaths=/home/runner/work/rust-api-template/rust-api-template/lcov.info
+            -Dsonar.coverageReportPaths=/home/runner/work/rust-api-template/rust-api-template/coverage.xml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
