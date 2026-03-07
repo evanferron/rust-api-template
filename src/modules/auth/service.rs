@@ -1,6 +1,8 @@
 use diesel_async::AsyncPgConnection;
+use uuid::Uuid;
 
 use crate::core::errors::ApiError;
+use crate::db::user::model::NewUser;
 use crate::db::user::repository::UserRepository;
 use crate::infra::config::Config;
 use crate::modules::auth::dto::{LoginRequest, LoginResponse, RefreshResponse, RegisterRequest};
@@ -25,8 +27,15 @@ pub async fn register(
         )));
     }
 
-    let password_hash = hash_password(&payload.password).await?;
-    let user = UserRepository::create(conn, payload, password_hash).await?;
+    let hashed_password = hash_password(&payload.password).await?;
+    let new_user = NewUser {
+        id: Uuid::new_v4(),
+        email: payload.email,
+        password: hashed_password,
+        first_name: payload.first_name,
+        last_name: payload.last_name,
+    };
+    let user = UserRepository::create(conn, new_user).await?;
     Ok(UserResponse::from(user))
 }
 

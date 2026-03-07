@@ -2,6 +2,7 @@ use diesel_async::AsyncPgConnection;
 use uuid::Uuid;
 
 use crate::core::errors::ApiError;
+use crate::db::user::model::UserChangeset;
 use crate::db::user::repository::UserRepository;
 use crate::modules::user::dto::{UpdateUserRequest, UserResponse};
 
@@ -26,7 +27,7 @@ pub async fn update(
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("User '{}' not found", id)))?;
 
-    let new_password_hash = match (&payload.new_password, &payload.current_password) {
+    let new_password = match (&payload.new_password, &payload.current_password) {
         (Some(new_pwd), Some(current_pwd)) => {
             let current_pwd = current_pwd.clone();
             let hash = user.password.clone();
@@ -56,7 +57,13 @@ pub async fn update(
         _ => None,
     };
 
-    UserRepository::update(conn, id, payload, new_password_hash)
+    let changeset = UserChangeset {
+        email: payload.email,
+        first_name: payload.first_name,
+        last_name: payload.last_name,
+        password: new_password,
+    };
+    UserRepository::update(conn, id, changeset)
         .await
         .map(UserResponse::from)
 }

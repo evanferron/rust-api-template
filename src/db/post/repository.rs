@@ -3,21 +3,20 @@ use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
 use crate::core::errors::ApiError;
-use crate::db::post::model::{NewPost, Post};
+use crate::db::post::model::{NewPost, Post, PostChangeset};
 use crate::db::schema::posts::dsl;
 use crate::db::user::model::User;
-use crate::modules::post::dto::{CreatePostRequest, UpdatePostRequest};
 
 // ---------------------------------------------------------------------------
 // Macros génériques
 // ---------------------------------------------------------------------------
 
+pub struct PostRepository;
+
 crate::impl_base_repository!(PostRepository, Post, crate::db::schema::posts, Uuid);
 crate::impl_exists!(PostRepository, crate::db::schema::posts, Uuid);
 crate::impl_count!(PostRepository, crate::db::schema::posts);
 crate::impl_find_paginated!(PostRepository, Post, crate::db::schema::posts, created_at);
-
-pub struct PostRepository;
 
 // ---------------------------------------------------------------------------
 // Méthodes spécifiques à Post
@@ -49,19 +48,9 @@ impl PostRepository {
             .map_err(ApiError::from)
     }
 
-    pub async fn create(
-        conn: &mut AsyncPgConnection,
-        user_id: Uuid,
-        payload: CreatePostRequest,
-    ) -> Result<Post, ApiError> {
-        let new_post = NewPost {
-            id: Uuid::new_v4(),
-            user_id,
-            title: payload.title,
-            content: payload.content,
-            published: payload.published.unwrap_or(false),
-        };
-
+    /// Insère un nouveau post.
+    /// La construction de `NewPost` est à la charge du service.
+    pub async fn create(conn: &mut AsyncPgConnection, new_post: NewPost) -> Result<Post, ApiError> {
         diesel::insert_into(dsl::posts)
             .values(&new_post)
             .returning(Post::as_returning())
@@ -70,17 +59,15 @@ impl PostRepository {
             .map_err(ApiError::from)
     }
 
+    /// Met à jour un post existant.
+    /// La construction de `PostChangeset` est à la charge du service.
     pub async fn update(
         conn: &mut AsyncPgConnection,
         id: Uuid,
-        payload: UpdatePostRequest,
+        changeset: PostChangeset,
     ) -> Result<Post, ApiError> {
         diesel::update(dsl::posts.find(id))
-            .set(&PostChangeset {
-                title: payload.title,
-                content: payload.content,
-                published: payload.published,
-            })
+            .set(&changeset)
             .returning(Post::as_returning())
             .get_result::<Post>(conn)
             .await
@@ -103,16 +90,4 @@ impl PostRepository {
             .optional()
             .map_err(ApiError::from)
     }
-}
-
-// ---------------------------------------------------------------------------
-// Changeset interne
-// ---------------------------------------------------------------------------
-
-#[derive(diesel::AsChangeset)]
-#[diesel(table_name = crate::db::schema::posts)]
-struct PostChangeset {
-    pub title: Option<String>,
-    pub content: Option<String>,
-    pub published: Option<bool>,
 }

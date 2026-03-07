@@ -22,10 +22,19 @@ pub struct Post {
 /// Modèle pour les insertions.
 #[derive(Debug, Insertable)]
 #[diesel(table_name = crate::db::schema::posts)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct NewPost {
     pub id: Uuid,
     pub user_id: Uuid,
     pub title: String,
     pub content: String,
     pub published: bool,
+}
+
+#[derive(diesel::AsChangeset)]
+#[diesel(table_name = crate::db::schema::posts)]
+pub struct PostChangeset {
+    pub title: Option<String>,
+    pub content: Option<String>,
+    pub published: Option<bool>,
 }
