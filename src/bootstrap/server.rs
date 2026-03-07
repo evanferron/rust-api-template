@@ -1,5 +1,7 @@
 use crate::bootstrap::config::Config;
 use crate::bootstrap::models::AppState;
+use crate::bootstrap::router::create_router;
+use crate::bootstrap::swagger;
 use crate::core::logger;
 use crate::core::middlewares::rate_limit::RateLimitStore;
 use axum::BoxError;
@@ -149,10 +151,10 @@ impl Server {
                 "/api-docs/openapi.json",
                 {
                     use utoipa::OpenApi;
-                    crate::routes::swagger::ApiDoc::openapi()
+                    swagger::ApiDoc::openapi()
                 },
             ))
-            .nest("/api", crate::routes::create_router(app_state))
+            .nest("/api", create_router(app_state))
             .layer(cors)
             .layer(trace_layer)
             .layer(

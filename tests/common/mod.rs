@@ -1,7 +1,7 @@
 use app::bootstrap::config::Config;
 use app::bootstrap::models::AppState;
+use app::bootstrap::router::create_router;
 use app::core::middlewares::rate_limit::RateLimitStore;
-use app::routes::create_router;
 use axum::Router;
 use diesel::Connection;
 use diesel::pg::PgConnection;
@@ -9,24 +9,14 @@ use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::bb8::Pool;
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
-use tokio::{runtime::Runtime, sync::OnceCell};
+use tokio::sync::OnceCell;
 
-use std::sync::{Mutex, OnceLock};
+use std::sync::Mutex;
 
 static DB_LOCK: Mutex<()> = Mutex::new(());
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
 
 static TEST_APP: OnceCell<Router> = OnceCell::const_new();
-static RUNTIME: OnceLock<Runtime> = OnceLock::new();
-
-fn runtime() -> &'static Runtime {
-    RUNTIME.get_or_init(|| {
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-    })
-}
 
 pub async fn get_test_app() -> &'static Router {
     TEST_APP
@@ -96,29 +86,6 @@ pub async fn build_test_app() -> Router {
 // ---------------------------------------------------------------------------
 // Seed helpers
 // ---------------------------------------------------------------------------
-
-pub async fn seed_user(
-    conn: &mut AsyncPgConnection,
-    email: &str,
-    password: &str,
-) -> app::db::user::model::User {
-    use app::db::user::repository::UserRepository;
-    use app::modules::auth::dto::RegisterRequest;
-
-    let cost = 4; // bcrypt rapide pour les tests
-    let hash = bcrypt::hash(password, cost).unwrap();
-
-    let payload = RegisterRequest {
-        email: email.to_string(),
-        password: password.to_string(),
-        first_name: "Test".to_string(),
-        last_name: "User".to_string(),
-    };
-
-    UserRepository::create(conn, payload, hash)
-        .await
-        .expect("Failed to seed user")
-}
 
 /// Crée un utilisateur et retourne son access token JWT.
 /// Pratique pour les tests de routes protégées.
