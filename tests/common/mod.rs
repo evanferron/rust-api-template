@@ -9,11 +9,30 @@ use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::bb8::Pool;
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
+use tokio::{runtime::Runtime, sync::OnceCell};
 
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 
 static DB_LOCK: Mutex<()> = Mutex::new(());
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
+
+static TEST_APP: OnceCell<Router> = OnceCell::const_new();
+static RUNTIME: OnceLock<Runtime> = OnceLock::new();
+
+fn runtime() -> &'static Runtime {
+    RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+    })
+}
+
+pub async fn get_test_app() -> &'static Router {
+    TEST_APP
+        .get_or_init(|| async { build_test_app().await })
+        .await
+}
 
 // ---------------------------------------------------------------------------
 // DB helpers

@@ -4,8 +4,10 @@ use axum::{
     body::Body,
     http::{Request, StatusCode, header},
 };
-use common::{build_test_app, reset_db, seed_user_and_login};
+use common::{reset_db, seed_user_and_login};
 use tower::ServiceExt;
+
+use crate::common::get_test_app;
 
 // ---------------------------------------------------------------------------
 // POST /api/auth/register
@@ -14,7 +16,7 @@ use tower::ServiceExt;
 #[tokio::test]
 async fn test_register_success() {
     reset_db();
-    let app = build_test_app().await;
+    let app = get_test_app().await.clone();
 
     let body = serde_json::json!({
         "email": "register@test.com",
@@ -59,7 +61,7 @@ async fn test_register_success() {
 #[tokio::test]
 async fn test_register_invalid_email() {
     reset_db();
-    let app = build_test_app().await;
+    let app = get_test_app().await.clone();
 
     let body = serde_json::json!({
         "email": "not-an-email",
@@ -86,7 +88,7 @@ async fn test_register_invalid_email() {
 #[tokio::test]
 async fn test_register_password_too_short() {
     reset_db();
-    let app = build_test_app().await;
+    let app = get_test_app().await.clone();
 
     let body = serde_json::json!({
         "email": "valid@test.com",
@@ -113,7 +115,7 @@ async fn test_register_password_too_short() {
 #[tokio::test]
 async fn test_register_duplicate_email() {
     reset_db();
-    let app = build_test_app().await;
+    let app = get_test_app().await.clone();
 
     let body = serde_json::json!({
         "email": "duplicate@test.com",
@@ -158,7 +160,7 @@ async fn test_register_duplicate_email() {
 #[tokio::test]
 async fn test_login_success() {
     reset_db();
-    let app = build_test_app().await;
+    let app = get_test_app().await.clone();
 
     let token = seed_user_and_login(&app, "login@test.com", "securepass").await;
     assert!(!token.is_empty());
@@ -167,7 +169,7 @@ async fn test_login_success() {
 #[tokio::test]
 async fn test_login_wrong_password() {
     reset_db();
-    let app = build_test_app().await;
+    let app = get_test_app().await.clone();
 
     // Crée l'utilisateur
     seed_user_and_login(&app, "user@test.com", "correctpass").await;
@@ -195,7 +197,7 @@ async fn test_login_wrong_password() {
 #[tokio::test]
 async fn test_login_unknown_email() {
     reset_db();
-    let app = build_test_app().await;
+    let app = get_test_app().await.clone();
 
     let body = serde_json::json!({
         "email": "ghost@test.com",
@@ -224,7 +226,7 @@ async fn test_login_unknown_email() {
 #[tokio::test]
 async fn test_refresh_with_valid_cookie() {
     reset_db();
-    let app = build_test_app().await;
+    let app = get_test_app().await.clone();
 
     // Login pour récupérer le cookie
     let login_body = serde_json::json!({
@@ -281,7 +283,7 @@ async fn test_refresh_with_valid_cookie() {
 #[tokio::test]
 async fn test_refresh_without_cookie() {
     reset_db();
-    let app = build_test_app().await;
+    let app = get_test_app().await.clone();
 
     let response = app
         .oneshot(

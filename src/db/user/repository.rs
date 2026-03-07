@@ -1,39 +1,23 @@
 use diesel::AsChangeset;
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper};
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
-use crate::{
-    core::errors::ApiError,
-    db::{
-        schema::users::dsl,
-        user::model::{NewUser, User},
-    },
-    modules::{auth::dto::RegisterRequest, user::dto::UpdateUserRequest},
-};
+use crate::core::errors::ApiError;
+use crate::db::schema::users::dsl;
+use crate::db::user::model::{NewUser, User};
+use crate::modules::auth::dto::RegisterRequest;
+use crate::modules::user::dto::UpdateUserRequest;
 
 pub struct UserRepository;
 
-impl UserRepository {
-    pub async fn find_all(conn: &mut AsyncPgConnection) -> Result<Vec<User>, ApiError> {
-        dsl::users
-            .order(dsl::created_at.desc())
-            .load::<User>(conn)
-            .await
-            .map_err(ApiError::from)
-    }
+// Génération à la compilation des méthodes du repo génériques
+crate::impl_base_repository!(UserRepository, User, crate::db::schema::users, Uuid);
 
-    pub async fn find_by_id(
-        conn: &mut AsyncPgConnection,
-        id: Uuid,
-    ) -> Result<Option<User>, ApiError> {
-        dsl::users
-            .find(id)
-            .first::<User>(conn)
-            .await
-            .optional()
-            .map_err(ApiError::from)
-    }
+impl UserRepository {
+    // -----------------------------------------------------------------------
+    // Méthodes spécifiques à User
+    // -----------------------------------------------------------------------
 
     pub async fn find_by_email(
         conn: &mut AsyncPgConnection,
@@ -59,8 +43,10 @@ impl UserRepository {
             first_name: payload.first_name,
             last_name: payload.last_name,
         };
+
         diesel::insert_into(dsl::users)
             .values(&new_user)
+            .returning(User::as_returning())
             .get_result::<User>(conn)
             .await
             .map_err(ApiError::from)
@@ -78,21 +64,19 @@ impl UserRepository {
             last_name: payload.last_name,
             password: new_password,
         };
+
         diesel::update(dsl::users.find(id))
             .set(&changeset)
+            .returning(User::as_returning())
             .get_result::<User>(conn)
             .await
             .map_err(ApiError::from)
     }
-
-    pub async fn delete(conn: &mut AsyncPgConnection, id: Uuid) -> Result<bool, ApiError> {
-        let rows = diesel::delete(dsl::users.find(id))
-            .execute(conn)
-            .await
-            .map_err(ApiError::from)?;
-        Ok(rows > 0)
-    }
 }
+
+// ---------------------------------------------------------------------------
+// Changeset interne
+// ---------------------------------------------------------------------------
 
 #[derive(AsChangeset)]
 #[diesel(table_name = crate::db::schema::users)]

@@ -4,8 +4,10 @@ use axum::{
     body::Body,
     http::{Request, StatusCode, header},
 };
-use common::{build_test_app, reset_db, seed_user_and_login};
+use common::{reset_db, seed_user_and_login};
 use tower::ServiceExt;
+
+use crate::common::get_test_app;
 
 // ---------------------------------------------------------------------------
 // GET /api/users
@@ -14,7 +16,7 @@ use tower::ServiceExt;
 #[tokio::test]
 async fn test_get_all_users_authenticated() {
     reset_db();
-    let app = build_test_app().await;
+    let app = get_test_app().await.clone();
 
     let token = seed_user_and_login(&app, "user@test.com", "securepass").await;
 
@@ -43,7 +45,7 @@ async fn test_get_all_users_authenticated() {
 #[tokio::test]
 async fn test_get_all_users_unauthenticated() {
     reset_db();
-    let app = build_test_app().await;
+    let app = get_test_app().await.clone();
 
     let response = app
         .oneshot(
@@ -66,7 +68,7 @@ async fn test_get_all_users_unauthenticated() {
 #[tokio::test]
 async fn test_get_user_by_id() {
     reset_db();
-    let app = build_test_app().await;
+    let app = get_test_app().await.clone();
 
     let token = seed_user_and_login(&app, "getbyid@test.com", "securepass").await;
 
@@ -114,7 +116,7 @@ async fn test_get_user_by_id() {
 #[tokio::test]
 async fn test_get_user_by_id_not_found() {
     reset_db();
-    let app = build_test_app().await;
+    let app = get_test_app().await.clone();
 
     let token = seed_user_and_login(&app, "user@test.com", "securepass").await;
 
@@ -140,7 +142,7 @@ async fn test_get_user_by_id_not_found() {
 #[tokio::test]
 async fn test_update_own_profile() {
     reset_db();
-    let app = build_test_app().await;
+    let app = get_test_app().await.clone();
 
     let token = seed_user_and_login(&app, "update@test.com", "securepass").await;
 
@@ -191,7 +193,7 @@ async fn test_update_own_profile() {
 #[tokio::test]
 async fn test_update_other_user_forbidden() {
     reset_db();
-    let app = build_test_app().await;
+    let app = get_test_app().await.clone();
 
     // Deux utilisateurs
     let token_a = seed_user_and_login(&app, "user_a@test.com", "securepass").await;
@@ -251,7 +253,7 @@ async fn test_update_other_user_forbidden() {
 #[tokio::test]
 async fn test_delete_own_account() {
     reset_db();
-    let app = build_test_app().await;
+    let app = get_test_app().await.clone();
 
     let token = seed_user_and_login(&app, "delete@test.com", "securepass").await;
 
@@ -292,7 +294,7 @@ async fn test_delete_own_account() {
 #[tokio::test]
 async fn test_delete_other_user_forbidden() {
     reset_db();
-    let app = build_test_app().await;
+    let app = get_test_app().await.clone();
 
     let token_a = seed_user_and_login(&app, "victim@test.com", "securepass").await;
     let token_b = seed_user_and_login(&app, "attacker@test.com", "securepass").await;
