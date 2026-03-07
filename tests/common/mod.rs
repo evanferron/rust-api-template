@@ -44,7 +44,7 @@ pub async fn test_pool() -> Pool<AsyncPgConnection> {
 }
 
 pub fn reset_db() {
-    let _guard = DB_LOCK.lock().unwrap(); // bloque jusqu'à ce que la DB soit libre
+    let _guard = DB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
     let db_url = test_db_url();
     let mut conn =

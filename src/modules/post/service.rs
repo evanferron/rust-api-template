@@ -2,7 +2,6 @@ use diesel_async::AsyncPgConnection;
 use uuid::Uuid;
 
 use crate::core::errors::ApiError;
-use crate::core::repository::BaseRepository;
 use crate::db::post::repository::PostRepository;
 use crate::modules::post::dto::{CreatePostRequest, PostResponse, UpdatePostRequest};
 
