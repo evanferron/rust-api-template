@@ -68,9 +68,7 @@ jobs:
         run: cargo llvm-cov --all -- --test-threads=1
 
       - name: Generate coverage reports
-        run: |
-          cargo llvm-cov report --lcov --output-path lcov.info
-          cargo llvm-cov report --cobertura --output-path coverage.xml
+        run: cargo llvm-cov report --lcov --output-path lcov.info
 
 
       - name: SonarCloud Scan
