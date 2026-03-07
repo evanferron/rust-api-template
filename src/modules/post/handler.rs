@@ -5,9 +5,9 @@ use axum::{
 };
 use uuid::Uuid;
 
-use crate::bootstrap::models::AppState;
 use crate::core::errors::{ApiError, ErrorResponse};
 use crate::core::validator::ValidatedJson;
+use crate::infra::state::AppState;
 use crate::modules::auth::helpers::Claims;
 use crate::modules::post::dto::{CreatePostRequest, PostResponse, UpdatePostRequest};
 use crate::modules::post::service;

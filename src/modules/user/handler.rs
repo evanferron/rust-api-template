@@ -9,7 +9,7 @@ use crate::core::errors::{ApiError, ErrorResponse};
 use crate::core::validator::ValidatedJson;
 use crate::modules::auth::helpers::Claims;
 use crate::modules::user::dto::{UpdateUserRequest, UserResponse};
-use crate::{bootstrap::models::AppState, modules::user::service};
+use crate::{infra::state::AppState, modules::user::service};
 
 #[utoipa::path(
     get, path = "/api/users", tag = "users",

@@ -1,9 +1,11 @@
-use crate::bootstrap::config::Config;
-use crate::bootstrap::models::AppState;
-use crate::bootstrap::router::create_router;
-use crate::bootstrap::swagger;
+pub mod router;
+mod swagger;
+
 use crate::core::logger;
 use crate::core::middlewares::rate_limit::RateLimitStore;
+use crate::infra::config::Config;
+use crate::infra::state::AppState;
+use crate::launch::router::create_router;
 use axum::BoxError;
 use axum::Router;
 use axum::error_handling::HandleErrorLayer;

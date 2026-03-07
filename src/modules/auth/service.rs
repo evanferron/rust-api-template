@@ -1,8 +1,8 @@
 use diesel_async::AsyncPgConnection;
 
-use crate::bootstrap::config::Config;
 use crate::core::errors::ApiError;
 use crate::db::user::repository::UserRepository;
+use crate::infra::config::Config;
 use crate::modules::auth::dto::{LoginRequest, LoginResponse, RefreshResponse, RegisterRequest};
 use crate::modules::auth::helpers::{create_refresh_token, create_token, verify_refresh_token};
 use crate::modules::user::dto::UserResponse;

@@ -1,4 +1,4 @@
-use crate::bootstrap::models::AppState;
+use crate::infra::state::AppState;
 use crate::modules::{auth, health, post, user};
 use axum::Router;
 
