@@ -1,0 +1,70 @@
+name: Build
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build & Analyze
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: app_test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://postgres:password@localhost:5432/app_test_db
+      DATABASE_TEST_URL: postgres://postgres:password@localhost:5432/app_test_db
+      JWT_SECRET: ci_secret_not_used_in_prod
+      JWT_EXPIRATION: 3600
+      FRONTEND_URL: http://localhost:3000
+      SERVER_HOST: 127.0.0.1
+      SERVER_PORT: 8080
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Obligatoire pour SonarCloud (analyse de l'historique)
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Install diesel CLI
+        run: cargo install diesel_cli --no-default-features --features postgres
+
+      - name: Run migrations
+        run: diesel migration run
+
+      - name: Run tests with coverage
+        run: cargo llvm-cov --all --lcov --output-path lcov.info -- --test-threads=1
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
