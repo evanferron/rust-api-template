@@ -6,7 +6,7 @@ services:
     name: rust-api-template
     runtime: docker
     dockerfilePath: ./Dockerfile
-    region: frankfurt # Le plus proche de Nantes
+    region: frankfurt
 
     plan: free
 
@@ -36,4 +36,3 @@ databases:
     plan: free
     region: frankfurt
     databaseName: app_db
-    user: postgres
