@@ -137,3 +137,10 @@ Ce projet inclut des fichiers de contexte pour maximiser l'aide des outils IA :
 | `CLAUDE.md` | Claude / ChatGPT | Coller en début de conversation |
 
 `CLAUDE.md` contient l'architecture complète, tous les patterns de code, les décisions techniques et les pièges connus — colle-le dans n'importe quel chat IA pour obtenir une assistance adaptée au projet.
+
+## Commande à exécuter pour accèder à la doc rust
+
+cargo doc --no-deps --document-private-items --open
+
+Pour comprendre comment fonctionne le repository générique :
+    dans la doc aller dans core/repostory

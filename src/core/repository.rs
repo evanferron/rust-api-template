@@ -436,3 +436,151 @@ macro_rules! impl_soft_delete {
         }
     };
 }
+
+/// ──────────────────────────────────────────────────────────────────────────────
+/// Tests unitaires pour les macros de repository
+/// ──────────────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ─── PaginationParams::new ───────────────────────────────────────────────
+
+    #[test]
+    fn test_pagination_new_nominal() {
+        let p = PaginationParams::new(3, 20);
+        assert_eq!(p.page, 3);
+        assert_eq!(p.per_page, 20);
+    }
+
+    #[test]
+    fn test_pagination_page_zero_clamped_to_one() {
+        let p = PaginationParams::new(0, 20);
+        assert_eq!(p.page, 1);
+    }
+
+    #[test]
+    fn test_pagination_negative_page_clamped_to_one() {
+        let p = PaginationParams::new(-5, 20);
+        assert_eq!(p.page, 1);
+    }
+
+    #[test]
+    fn test_pagination_per_page_zero_clamped_to_one() {
+        let p = PaginationParams::new(1, 0);
+        assert_eq!(p.per_page, 1);
+    }
+
+    #[test]
+    fn test_pagination_per_page_negative_clamped_to_one() {
+        let p = PaginationParams::new(1, -10);
+        assert_eq!(p.per_page, 1);
+    }
+
+    #[test]
+    fn test_pagination_per_page_above_max_clamped_to_100() {
+        let p = PaginationParams::new(1, 500);
+        assert_eq!(p.per_page, 100);
+    }
+
+    #[test]
+    fn test_pagination_per_page_at_max_boundary() {
+        let p = PaginationParams::new(1, 100);
+        assert_eq!(p.per_page, 100);
+    }
+
+    #[test]
+    fn test_pagination_per_page_at_min_boundary() {
+        let p = PaginationParams::new(1, 1);
+        assert_eq!(p.per_page, 1);
+    }
+
+    // ─── PaginationParams::offset ────────────────────────────────────────────
+
+    #[test]
+    fn test_offset_page_one_is_zero() {
+        let p = PaginationParams::new(1, 20);
+        assert_eq!(p.offset(), 0);
+    }
+
+    #[test]
+    fn test_offset_page_two() {
+        let p = PaginationParams::new(2, 20);
+        assert_eq!(p.offset(), 20);
+    }
+
+    #[test]
+    fn test_offset_page_three() {
+        let p = PaginationParams::new(3, 10);
+        assert_eq!(p.offset(), 20);
+    }
+
+    #[test]
+    fn test_offset_large_page() {
+        let p = PaginationParams::new(100, 50);
+        assert_eq!(p.offset(), 4950);
+    }
+
+    // ─── PaginatedResponse::new ──────────────────────────────────────────────
+
+    #[test]
+    fn test_paginated_response_total_pages_exact_division() {
+        // 100 items / 10 per page = 10 pages exactes
+        let params = PaginationParams::new(1, 10);
+        let resp = PaginatedResponse::new(vec![1, 2, 3], 100, &params);
+        assert_eq!(resp.total_pages, 10);
+        assert_eq!(resp.total, 100);
+        assert_eq!(resp.page, 1);
+        assert_eq!(resp.per_page, 10);
+    }
+
+    #[test]
+    fn test_paginated_response_total_pages_with_remainder() {
+        // 101 items / 10 per page = 11 pages (arrondi supérieur)
+        let params = PaginationParams::new(1, 10);
+        let resp = PaginatedResponse::new(vec![1i32; 10], 101, &params);
+        assert_eq!(resp.total_pages, 11);
+    }
+
+    #[test]
+    fn test_paginated_response_single_page() {
+        let params = PaginationParams::new(1, 20);
+        let resp = PaginatedResponse::new(vec!["a", "b", "c"], 3, &params);
+        assert_eq!(resp.total_pages, 1);
+        assert_eq!(resp.data.len(), 3);
+    }
+
+    #[test]
+    fn test_paginated_response_empty_result() {
+        let params = PaginationParams::new(1, 20);
+        let resp = PaginatedResponse::<String>::new(vec![], 0, &params);
+        assert_eq!(resp.total_pages, 0);
+        assert_eq!(resp.total, 0);
+        assert!(resp.data.is_empty());
+    }
+
+    #[test]
+    fn test_paginated_response_one_item_per_page() {
+        // 5 items / 1 per page = 5 pages
+        let params = PaginationParams::new(1, 1);
+        let resp = PaginatedResponse::new(vec![42], 5, &params);
+        assert_eq!(resp.total_pages, 5);
+    }
+
+    #[test]
+    fn test_paginated_response_preserves_current_page() {
+        let params = PaginationParams::new(4, 10);
+        let resp = PaginatedResponse::<i32>::new(vec![], 50, &params);
+        assert_eq!(resp.page, 4);
+        assert_eq!(resp.per_page, 10);
+    }
+
+    #[test]
+    fn test_paginated_response_per_page_larger_than_total() {
+        // 3 items / 20 per page = 1 page
+        let params = PaginationParams::new(1, 20);
+        let resp = PaginatedResponse::new(vec![1, 2, 3], 3, &params);
+        assert_eq!(resp.total_pages, 1);
+    }
+}

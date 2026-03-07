@@ -183,3 +183,156 @@ impl Server {
         .await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::infra::state::{DatabaseConfig, JwtConfig, ServerConfig};
+
+    // ─── Helper ─────────────────────────────────────────────────────────────
+
+    fn make_config(host: &str, port: u16, env: &str) -> Config {
+        Config {
+            server: ServerConfig {
+                host: host.to_string(),
+                port,
+                environment: env.to_string(),
+            },
+            database: DatabaseConfig {
+                url: "postgres://postgres:password@localhost:5432/app_db".to_string(),
+                max_connections: 5,
+                acquire_timeout: 30,
+                idle_timeout: 600,
+                max_lifetime: 1800,
+            },
+            jwt: JwtConfig {
+                secret: "test_secret".to_string(),
+                expiration: 86400,
+                refresh_secret: "test_refresh_secret".to_string(),
+                refresh_expiration: 604800,
+            },
+        }
+    }
+
+    // ─── Server::new ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_server_new_stores_config() {
+        let config = make_config("127.0.0.1", 8080, "development");
+        let server = Server::new(config.clone());
+        assert_eq!(server.config.server.host, "127.0.0.1");
+        assert_eq!(server.config.server.port, 8080);
+        assert_eq!(server.config.server.environment, "development");
+    }
+
+    #[test]
+    fn test_server_clone() {
+        let config = make_config("0.0.0.0", 3000, "production");
+        let server = Server::new(config);
+        let cloned = server.clone();
+        assert_eq!(cloned.config.server.port, 3000);
+        assert_eq!(cloned.config.server.environment, "production");
+    }
+
+    #[test]
+    fn test_server_bind_address_format() {
+        let config = make_config("127.0.0.1", 9090, "development");
+        let server = Server::new(config);
+        let addr = format!(
+            "{}:{}",
+            server.config.server.host, server.config.server.port
+        );
+        assert_eq!(addr, "127.0.0.1:9090");
+        // Vérifie que l'adresse est parseable en SocketAddr
+        assert!(
+            addr.parse::<SocketAddr>().is_ok(),
+            "adresse invalide : {}",
+            addr
+        );
+    }
+
+    #[test]
+    fn test_server_bind_address_all_interfaces() {
+        let config = make_config("0.0.0.0", 8080, "production");
+        let server = Server::new(config);
+        let addr = format!(
+            "{}:{}",
+            server.config.server.host, server.config.server.port
+        );
+        assert!(addr.parse::<SocketAddr>().is_ok());
+    }
+
+    // ─── Config values used at runtime ───────────────────────────────────────
+
+    #[test]
+    fn test_database_pool_config_values_are_positive() {
+        let config = make_config("127.0.0.1", 8080, "development");
+        assert!(config.database.max_connections > 0);
+        assert!(config.database.acquire_timeout > 0);
+        assert!(config.database.idle_timeout > 0);
+        assert!(config.database.max_lifetime > 0);
+    }
+
+    #[test]
+    fn test_idle_timeout_less_than_max_lifetime() {
+        // idle_timeout doit être < max_lifetime pour éviter des connexions idle expirées
+        // avant d'être récupérées par le pool
+        let config = make_config("127.0.0.1", 8080, "development");
+        assert!(
+            config.database.idle_timeout < config.database.max_lifetime,
+            "idle_timeout ({}) doit être < max_lifetime ({})",
+            config.database.idle_timeout,
+            config.database.max_lifetime
+        );
+    }
+
+    #[test]
+    fn test_jwt_expiration_less_than_refresh() {
+        // Le JWT access token doit expirer avant le refresh token
+        let config = make_config("127.0.0.1", 8080, "development");
+        assert!(
+            config.jwt.expiration < config.jwt.refresh_expiration,
+            "jwt.expiration ({}) doit être < refresh_expiration ({})",
+            config.jwt.expiration,
+            config.jwt.refresh_expiration
+        );
+    }
+
+    // ─── Test d'intégration — démarrage réel avec DB de test ─────────────────
+
+    /// Vérifie que le serveur démarre, lie le port et répond sur /api/health.
+    /// Nécessite DATABASE_TEST_URL en environnement (lancé via `cargo test -- --test-threads=1`).
+    #[tokio::test]
+    #[ignore] // Exécuter avec : cargo test test_server_starts -- --ignored --test-threads=1
+    async fn test_server_starts_and_responds() {
+        dotenvy::dotenv().ok();
+
+        let mut config = Config::from_env().expect("Config::from_env() failed");
+        config.server.port = 18080; // port dédié pour éviter les conflits
+        config.database.url =
+            std::env::var("DATABASE_TEST_URL").unwrap_or_else(|_| config.database.url.clone());
+
+        let server = Server::new(config.clone());
+
+        // Lance le serveur dans une tâche séparée
+        let server_handle = tokio::spawn(async move {
+            server.run().await.expect("server crashed");
+        });
+
+        // Attend que le serveur soit prêt
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+        // Vérifie que /api/health répond 200
+        let client = reqwest::Client::new();
+        let response = client
+            .get(format!("http://127.0.0.1:{}/api/health", 18080))
+            .timeout(std::time::Duration::from_secs(5))
+            .send()
+            .await
+            .expect("health check request failed");
+
+        assert_eq!(response.status(), 200);
+
+        server_handle.abort();
+    }
+}
