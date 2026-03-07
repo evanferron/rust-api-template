@@ -2,7 +2,7 @@
 # Stage 1 — Builder
 # Compile le binaire en mode release avec cache des dépendances
 # =============================================================================
-FROM rust:1.76-slim-bookworm AS builder
+FROM rust:1.85-slim-bookworm AS chef
 
 WORKDIR /app
 
