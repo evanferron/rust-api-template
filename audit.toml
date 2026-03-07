@@ -1,0 +1,6 @@
+# audit.toml
+[ignore]
+# Marvin Attack sur rsa 0.9.x — pas de fix disponible upstream
+# jsonwebtoken 10.x dépend de rsa pour RS256/RS512 uniquement
+# Notre app utilise uniquement HS256 (HMAC) — non affecté
+RUSTSEC-2023-0071 = { reason = "We only use HS256, RSA algorithms are not used" }

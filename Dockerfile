@@ -41,9 +41,8 @@ RUN apt-get update && apt-get install -y \
     libpq5 \
     ca-certificates \
     curl \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN useradd --uid 1001 --no-create-home --shell /bin/false appuser
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --uid 1001 --no-create-home --shell /bin/false appuser
 
 WORKDIR /app
 
