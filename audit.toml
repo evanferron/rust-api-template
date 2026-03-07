@@ -1,6 +1,4 @@
-# audit.toml
-[ignore]
-# Marvin Attack sur rsa 0.9.x — pas de fix disponible upstream
-# jsonwebtoken 10.x dépend de rsa pour RS256/RS512 uniquement
-# Notre app utilise uniquement HS256 (HMAC) — non affecté
-RUSTSEC-2023-0071 = { reason = "We only use HS256, RSA algorithms are not used" }
+[advisories]
+ignore = [
+    "RUSTSEC-2023-0071",
+] # Ignore the advisory for `serde` version 1.0.0, which is a false positive in this context.
