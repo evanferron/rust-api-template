@@ -65,5 +65,11 @@ async-trait = "0.1"
 
 
 [dev-dependencies]
+cucumber = "^0.22.1"                                  # ✅ tokio est maintenant inclus par défaut
+tokio = { version = "1", features = ["full"] }
 tokio-test = "0.4"
 reqwest = { version = "0.13.2", features = ["json"] }
+
+[[test]]
+name = "cucumber"
+harness = false
