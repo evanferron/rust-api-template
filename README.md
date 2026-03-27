@@ -90,12 +90,9 @@ Ensuite :
 
 ## Tests
 
-```bash
-# Tests unitaires + e2e
-cargo test -- --test-threads=1
-
-# Coverage HTML
-cargo llvm-cov --all --html --open -- --test-threads=1
+```ps1
+# Exécution de tout les test (En POWERSHELl)
+.\script\cov.ps1
 ```
 
 > Les tests e2e utilisent une base dédiée (`DATABASE_TEST_URL`) et se réinitialisent avant chaque test.
