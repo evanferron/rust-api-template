@@ -142,9 +142,15 @@ rust-api-template/
 ├── tests/
 │   ├── common/
 │   │   └── mod.rs           ← get_test_app(), reset_db(), seed_user_and_login()
-│   ├── e2e_auth_tests.rs
-│   ├── e2e_user_tests.rs
-│   └── e2e_post_tests.rs
+│   ├── cucumber.rs          ← orchestrateur des features Cucumber
+│   ├── features/
+│   │   ├── auth.feature
+│   │   ├── post.feature
+│   │   └── user.feature
+│   └── steps/
+│       ├── auth_steps.rs
+│       ├── post_steps.rs
+│       └── user_steps.rs
 ├── docs/
 │   ├── module_generator.md
 │   ├── tests.md
@@ -851,7 +857,67 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON <nom_pluriel>
 
 ---
 
-## 15. Tests e2e
+## 15. Tests e2e (Cucumber)
+
+Les tests e2e sont désormais pilotés par **Cucumber** (features Gherkin + steps Rust), et non plus par des fichiers `e2e_*_tests.rs`.
+
+### Organisation des tests
+
+```tree
+tests/
+├── cucumber.rs             ← point d'entrée qui lance les features
+├── common/
+│   └── mod.rs              ← app de test, reset DB, seed helpers
+├── features/
+│   ├── auth.feature
+│   ├── post.feature
+│   └── user.feature
+└── steps/
+    ├── auth_steps.rs       ← World + steps auth
+    ├── post_steps.rs       ← World + steps posts
+    └── user_steps.rs       ← World + steps users
+```
+
+### Orchestrateur Cucumber (tests/cucumber.rs)
+
+```rust
+mod steps {
+    pub mod auth_steps;
+    pub mod post_steps;
+    pub mod user_steps;
+}
+mod common;
+
+use cucumber::World;
+use crate::{
+    common::reset_db,
+    steps::{auth_steps::AuthWorld, post_steps::PostsWorld, user_steps::UsersWorld},
+};
+
+#[tokio::main]
+async fn main() {
+    // AUTH
+    reset_db();
+    AuthWorld::cucumber()
+        .max_concurrent_scenarios(1)
+        .run("tests/features/auth.feature")
+        .await;
+
+    // POSTS
+    reset_db();
+    PostsWorld::cucumber()
+        .max_concurrent_scenarios(1)
+        .run("tests/features/post.feature")
+        .await;
+
+    // USERS
+    reset_db();
+    UsersWorld::cucumber()
+        .max_concurrent_scenarios(1)
+        .run("tests/features/user.feature")
+        .await;
+}
+```
 
 ### Infrastructure partagée (tests/common/mod.rs)
 
@@ -863,69 +929,72 @@ static TEST_APP: OnceCell<Router> = OnceCell::const_new();
 static DB_LOCK: Mutex<()> = Mutex::new(());
 
 pub async fn get_test_app() -> &'static Router {
-    TEST_APP.get_or_init(|| async {
-        dotenvy::dotenv().ok();
-        let config = Config::from_env().unwrap();
-        // build app avec DATABASE_TEST_URL
-        build_app(config).await
-    }).await
+    TEST_APP
+        .get_or_init(|| async { build_test_app().await })
+        .await
 }
 
 pub fn reset_db() {
-    // PoisonError géré avec unwrap_or_else
     let _guard = DB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    // revert + run migrations avec DATABASE_TEST_URL
-    run_test_migrations();
+    // revert_all_migrations + run_pending_migrations sur DATABASE_TEST_URL
+}
+
+pub async fn build_test_app() -> Router {
+    let config = test_config();
+    let pool = test_pool().await;
+
+    let state = AppState {
+        pool,
+        config: Arc::new(config),
+        rate_limit: RateLimitStore::new(1000, 1000),
+    };
+
+    Router::new().nest("/api", create_router(state))
 }
 
 pub async fn seed_user_and_login(app: &Router, email: &str, password: &str) -> String {
     // 1. POST /api/auth/register
     // 2. POST /api/auth/login
-    // 3. Retourner le access_token
+    // 3. Retourner access_token
 }
 ```
 
-### Structure d'un test e2e
+### Structure d'un step file (exemple)
 
 ```rust
-#[tokio::test]
-async fn test_create_post_success() {
+#[derive(Debug, World)]
+#[world(init = Self::new)]
+pub struct AuthWorld {
+    app: Router,
+    status: u16,
+    body: serde_json::Value,
+}
+
+#[given("la base de données est réinitialisée")]
+async fn reset_database(_world: &mut AuthWorld) {
     reset_db();
-    let app = get_test_app().await.clone();
-    let token = seed_user_and_login(&app, "user@test.com", "Password123!").await;
+}
 
-    let body = json!({
-        "title": "Test post",
-        "content": "Test content"
-    });
+#[when(expr = "je me connecte avec:")]
+async fn when_login_with(world: &mut AuthWorld, step: &Step) {
+    // construit le payload depuis la table Gherkin
+    // envoie la requête HTTP avec app.oneshot(...)
+    // stocke status/body dans le world
+}
 
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method(Method::POST)
-                .uri("/api/posts")
-                .header(header::AUTHORIZATION, format!("Bearer {}", token))
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(body.to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::CREATED);
-
-    let body: Value = serde_json::from_slice(
-        &axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap()
-    ).unwrap();
-
-    assert_eq!(body["title"], "Test post");
+#[then(expr = "le statut de la réponse est {int}")]
+async fn then_status_is(world: &mut AuthWorld, expected: u16) {
+    assert_eq!(world.status, expected);
 }
 ```
 
 ### Commandes tests
 
 ```bash
-# Tests avec isolement
+# Exécuter les scénarios e2e Cucumber
+cargo test --test cucumber
+
+# Exécuter tous les tests (unit + intégration + cucumber)
 cargo test -- --test-threads=1
 
 # Coverage HTML
@@ -949,7 +1018,7 @@ test-threads = 1  # Obligatoire — les migrations partagent la même DB
 | -------- | ----- | -------- |
 | `Cannot start runtime from within runtime` | `OnceLock` sync dans async | Utiliser `tokio::sync::OnceCell` |
 | `PoisonError` sur DB_LOCK | Panic dans un test précédent | `unwrap_or_else(\|e\| e.into_inner())` |
-| Deadlock migrations | Tests en parallèle | `--test-threads=1` + `DB_LOCK` mutex |
+| Deadlock migrations | Features/scénarios exécutés en parallèle | `max_concurrent_scenarios(1)` + `DB_LOCK` mutex |
 | `ConnectInfo` manquant | Pas de `with_connect_info` sur le router de test | Lire depuis extensions avec `.get()` + fallback `127.0.0.1` |
 | Routes 404 | Module non branché dans router.rs | Vérifier `create_router()` + `pub mod` dans `mod.rs` |
 
