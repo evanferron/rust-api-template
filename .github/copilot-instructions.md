@@ -150,12 +150,37 @@ diesel::allow_tables_to_appear_in_same_query!(users, posts);
 
 ## Tests e2e
 
+Les tests e2e sont créé via cucumber
+
+Il y'a un fichier feature dans `tests/features` et les steps correspondants dans `tests/steps` (par feature).
+Les tests cucumber sonnt orchestré dans le fichier `tests/cucumber.rs` qui utilise `cucumber_rust` pour lancer les features.
+
 ```rust
-// Utilise get_test_app() — instance partagée via OnceCell
-let app = get_test_app().await.clone();
-// reset_db() au début de chaque test
-reset_db();
-// Lance avec --test-threads=1
+// tests/cucumber.rs
+
+async fn main() {
+    // AUTH
+    reset_db();
+    AuthWorld::cucumber()
+        .max_concurrent_scenarios(1)
+        .run("tests/features/auth.feature")
+        .await;
+
+    // POSTS
+    reset_db();
+    PostsWorld::cucumber()
+        .max_concurrent_scenarios(1)
+        .run("tests/features/post.feature")
+        .await;
+
+    // USERS
+    reset_db();
+    UsersWorld::cucumber()
+        .max_concurrent_scenarios(1)
+        .run("tests/features/user.feature")
+        .await;
+}
+
 ```
 
 ## CI/CD
