@@ -1,7 +1,7 @@
 pub mod router;
 mod swagger;
 
-use crate::config::config::Config;
+use crate::config::api_config::Config;
 use crate::config::state::AppState;
 use crate::core::logger;
 use crate::core::middlewares::rate_limit::RateLimitStore;

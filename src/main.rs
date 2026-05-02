@@ -1,4 +1,4 @@
-use app::{config::config::Config, server::Server};
+use app::{config::api_config::Config, server::Server};
 use dotenvy::dotenv;
 
 #[tokio::main]

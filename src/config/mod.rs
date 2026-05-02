@@ -1,2 +1,2 @@
-pub mod config;
+pub mod api_config;
 pub mod state;

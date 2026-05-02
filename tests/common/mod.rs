@@ -1,4 +1,4 @@
-use app::config::config::Config;
+use app::config::api_config::Config;
 use app::config::state::AppState;
 use app::{core::middlewares::rate_limit::RateLimitStore, server::router::create_router};
 use axum::Router;

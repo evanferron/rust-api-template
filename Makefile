@@ -44,7 +44,7 @@ test-cov:
 # lint: Lint le code avec clippy et traite les warnings comme des erreurs
 lint:
 	@echo "${HELP_COLOR}==> Linting du code...${RESET}"
-	cargo clippy --workspace --features all -- -D warnings
+	cargo clippy --workspace -- -D warnings
 
 # fmt: Formate le code avec rustfmt et traite les erreurs de formatage comme des erreurs
 fmt:
@@ -72,3 +72,8 @@ module-del:
 	fi
 	@echo "${HELP_COLOR}==> Suppression du module ${RESET}"
 	cargo run --bin generate -- delete $(name)
+
+## doc: Création de la documentation
+doc:
+	@echo "${HELP_COLOR}==> Generation de la documentation...${RESET}"
+	cargo doc --no-deps --document-private-items --open

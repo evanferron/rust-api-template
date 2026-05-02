@@ -1,7 +1,7 @@
 use diesel_async::AsyncPgConnection;
 use uuid::Uuid;
 
-use crate::config::config::Config;
+use crate::config::api_config::Config;
 use crate::core::errors::ApiError;
 use crate::db::user::model::NewUser;
 use crate::db::user::repository::UserRepository;

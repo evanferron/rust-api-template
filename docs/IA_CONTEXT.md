@@ -79,7 +79,7 @@ rust-api-template/
 ├── .github/
 │   ├── copilot-instructions.md
 │   └── workflows/
-│       ├── build.yml        ← CI : lint + tests + SonarCloud + cargo audit
+│       ├── ci.yml        ← CI : lint + tests + SonarCloud + cargo audit
 │       └── cd.yml           ← CD : Docker Hub + Render deploy hook
 ├── migrations/
 │   ├── 00000000000000_diesel_initial_setup/
