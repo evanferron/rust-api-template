@@ -4,5 +4,5 @@ pub mod dto;
 pub mod handler;
 
 pub fn routes() -> Router {
-    Router::new().route("/health", get(handler::health_check))
+    Router::new().route("/", get(handler::health_check))
 }

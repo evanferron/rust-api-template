@@ -4,8 +4,8 @@ use axum::Router;
 
 pub fn create_router(state: AppState) -> Router {
     Router::new()
-        .merge(health::routes())
-        .merge(auth::routes(state.clone()))
-        .merge(user::routes(state.clone()))
-        .merge(post::routes(state))
+        .nest("/health", health::routes())
+        .nest("/auth", auth::routes(state.clone()))
+        .nest("/users", user::routes(state.clone()))
+        .nest("/posts", post::routes(state))
 }
