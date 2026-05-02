@@ -105,11 +105,11 @@ rust-api-template/
 │   │       ├── model.rs     ← Post + NewPost
 │   │       ├── repository.rs ← PostRepository
 │   │       └── mod.rs
-│   ├── infra/
+│   ├── config/
 │   │   ├── config.rs        ← Config::from_env()
 │   │   ├── state.rs         ← AppState + RateLimitStore
 │   │   └── mod.rs
-│   ├── launch/
+│   ├── server/
 │   │   ├── router.rs        ← create_router(state) → Router
 │   │   ├── swagger.rs       ← ApiDoc (utoipa)
 │   │   └── mod.rs
@@ -176,7 +176,7 @@ rust-api-template/
 ## 4. AppState et Config
 
 ```rust
-// infra/state.rs
+// config/state.rs
 pub type RateLimitStore = Arc<DashMap<String, Arc<DefaultDirectRateLimiter>>>;
 
 pub struct AppState {
@@ -185,7 +185,7 @@ pub struct AppState {
     pub rate_limit: RateLimitStore,
 }
 
-// infra/config.rs
+// config/config.rs
 pub struct Config {
     pub server_host: String,         // SERVER_HOST
     pub server_port: u16,            // SERVER_PORT
@@ -549,7 +549,7 @@ pub async fn delete(
 use axum::{Extension, Json, extract::Path, extract::State, http::StatusCode};
 use uuid::Uuid;
 use utoipa::OpenApi;
-use crate::infra::state::AppState;
+use crate::config::state::AppState;
 use crate::modules::auth::helpers::Claims;
 use crate::core::errors::ApiError;
 use crate::core::validator::ValidatedJson;
@@ -598,7 +598,7 @@ pub async fn create(
 ```rust
 use axum::{Router, routing::{delete, get, post, put}};
 use axum::middleware::from_fn_with_state;
-use crate::infra::state::AppState;
+use crate::config::state::AppState;
 use crate::core::middlewares::{auth::require_auth, rate_limit::rate_limit_by_user};
 
 pub mod dto;
@@ -731,7 +731,7 @@ pub async fn rate_limit_by_user(
 **IMPORTANT :** le router principal doit utiliser `into_make_service_with_connect_info::<SocketAddr>()` pour que `ConnectInfo` soit disponible :
 
 ```rust
-// launch/server.rs
+// server/server.rs
 axum::serve(listener, router.into_make_service_with_connect_info::<SocketAddr>())
     .await?;
 ```
@@ -919,7 +919,7 @@ async fn main() {
 }
 ```
 
-### Infrastructure partagée (tests/common/mod.rs)
+### configstructure partagée (tests/common/mod.rs)
 
 ```rust
 use tokio::sync::OnceCell;
@@ -1028,10 +1028,10 @@ test-threads = 1  # Obligatoire — les migrations partagent la même DB
 
 ```bash
 # Générer un nouveau module
-cargo run --bin generate -- generate invoice
+make module-gen invoice
 
 # Supprimer un module
-cargo run --bin generate -- delete invoice
+make module-del invoice
 ```
 
 **Ce que le générateur crée automatiquement :**
@@ -1051,8 +1051,8 @@ cargo run --bin generate -- delete invoice
 2. `diesel migration run`
 3. Ajouter `pub mod invoice;` dans `src/db/mod.rs`
 4. Ajouter `pub mod invoice;` dans `src/modules/mod.rs`
-5. Brancher dans `src/launch/router.rs` : `.merge(invoice::routes(state.clone()))`
-6. Ajouter les paths utoipa dans `src/launch/swagger.rs`
+5. Brancher dans `src/server/router.rs` : `.merge(invoice::routes(state.clone()))`
+6. Ajouter les paths utoipa dans `src/server/swagger.rs`
 
 **Nommage automatique :**
 

@@ -4,8 +4,8 @@ use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::bb8::Pool;
 use serde::Deserialize;
 
+use crate::config::config::Config;
 use crate::core::middlewares::rate_limit::RateLimitStore;
-use crate::infra::config::Config;
 
 // ---------------------------------------------------------------------------
 // Config structs

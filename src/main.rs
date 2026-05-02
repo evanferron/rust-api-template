@@ -1,4 +1,4 @@
-use app::{infra::config::Config, launch::Server};
+use app::{config::config::Config, server::Server};
 use dotenvy::dotenv;
 
 #[tokio::main]

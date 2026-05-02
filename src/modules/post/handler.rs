@@ -1,8 +1,8 @@
+use crate::config::state::AppState;
 use crate::core::errors::{ApiError, ErrorResponse};
 use crate::core::params::{PaginationQuery, UuidParam};
 use crate::core::repository::PaginationParams;
 use crate::core::validator::{ValidatedJson, ValidatedPath, ValidatedQuery};
-use crate::infra::state::AppState;
 use crate::modules::auth::helpers::Claims;
 use crate::modules::post::dto::{CreatePostRequest, PostResponse, UpdatePostRequest};
 use crate::modules::post::service;

@@ -43,12 +43,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Obligatoire pour SonarCloud (analyse de l'historique)
+          fetch-depth: 0 # Obligatoire pour SonarCloud (analyse de l'historique)
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+        run: make init
 
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
@@ -63,14 +61,14 @@ jobs:
         run: diesel migration run
 
       - name: Run tests with coverage
-        run: | 
-            cargo metadata --no-deps --format-version 1 \
-            | jq -r '.packages[0].targets[] | select(.kind[] == "test") | select(.name != "cucumber") | .name' \
-            | xargs -I{} cargo llvm-cov --no-report --test {} -- --test-threads=1    
-            cargo llvm-cov --no-report --lib -- --test-threads=1
-            cargo llvm-cov --no-report --test cucumber
-            cargo llvm-cov report --lcov --output-path lcov.info
-    
+        run: |
+          cargo metadata --no-deps --format-version 1 \
+          | jq -r '.packages[0].targets[] | select(.kind[] == "test") | select(.name != "cucumber") | .name' \
+          | xargs -I{} cargo llvm-cov --no-report --test {} -- --test-threads=1
+          cargo llvm-cov --no-report --lib -- --test-threads=1
+          cargo llvm-cov --no-report --test cucumber
+          cargo llvm-cov report --lcov --output-path lcov.info
+
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v6
         with:

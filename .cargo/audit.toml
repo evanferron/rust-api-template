@@ -1,4 +1,0 @@
-[advisories]
-ignore = [
-    "RUSTSEC-2023-0071",
-] # Ignore the advisory for `serde` version 1.0.0, which is a false positive in this context.

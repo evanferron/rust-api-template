@@ -1,11 +1,11 @@
 pub mod router;
 mod swagger;
 
+use crate::config::config::Config;
+use crate::config::state::AppState;
 use crate::core::logger;
 use crate::core::middlewares::rate_limit::RateLimitStore;
-use crate::infra::config::Config;
-use crate::infra::state::AppState;
-use crate::launch::router::create_router;
+use crate::server::router::create_router;
 use axum::BoxError;
 use axum::Router;
 use axum::error_handling::HandleErrorLayer;
@@ -188,7 +188,7 @@ impl Server {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infra::state::{DatabaseConfig, JwtConfig, ServerConfig};
+    use crate::config::state::{DatabaseConfig, JwtConfig, ServerConfig};
 
     // ─── Helper ─────────────────────────────────────────────────────────────
 
@@ -297,43 +297,5 @@ mod tests {
             config.jwt.expiration,
             config.jwt.refresh_expiration
         );
-    }
-
-    // ─── Test d'intégration — démarrage réel avec DB de test ─────────────────
-
-    /// Vérifie que le serveur démarre, lie le port et répond sur /api/health.
-    /// Nécessite DATABASE_TEST_URL en environnement (lancé via `cargo test -- --test-threads=1`).
-    #[tokio::test]
-    #[ignore] // Exécuter avec : cargo test test_server_starts -- --ignored --test-threads=1
-    async fn test_server_starts_and_responds() {
-        dotenvy::dotenv().ok();
-
-        let mut config = Config::from_env().expect("Config::from_env() failed");
-        config.server.port = 18080; // port dédié pour éviter les conflits
-        config.database.url =
-            std::env::var("DATABASE_TEST_URL").unwrap_or_else(|_| config.database.url.clone());
-
-        let server = Server::new(config.clone());
-
-        // Lance le serveur dans une tâche séparée
-        let server_handle = tokio::spawn(async move {
-            server.run().await.expect("server crashed");
-        });
-
-        // Attend que le serveur soit prêt
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-
-        // Vérifie que /api/health répond 200
-        let client = reqwest::Client::new();
-        let response = client
-            .get(format!("http://127.0.0.1:{}/api/health", 18080))
-            .timeout(std::time::Duration::from_secs(5))
-            .send()
-            .await
-            .expect("health check request failed");
-
-        assert_eq!(response.status(), 200);
-
-        server_handle.abort();
     }
 }

@@ -1,4 +1,4 @@
-use crate::infra::state::{DatabaseConfig, JwtConfig, ServerConfig};
+use crate::config::state::{DatabaseConfig, JwtConfig, ServerConfig};
 use serde::Deserialize;
 use std::env;
 

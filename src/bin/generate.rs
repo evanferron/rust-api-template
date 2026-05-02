@@ -233,15 +233,15 @@ fn print_next_steps(module: &ModuleNames) {
         module.snake
     );
     println!(
-        "  5. Branche les routes dans src/launch/router.rs :\n     .merge({}::routes(state.clone()))\n",
+        "  5. Branche les routes dans src/server/router.rs :\n     .merge({}::routes(state.clone()))\n",
         module.snake
     );
     println!(
-        "  6. Ajoute les paths utoipa dans src/launch/swagger.rs :\n     crate::modules::{}::handler::get_all,\n     crate::modules::{}::handler::get_by_id,\n     crate::modules::{}::handler::create,\n     crate::modules::{}::handler::update,\n     crate::modules::{}::handler::delete,\n",
+        "  6. Ajoute les paths utoipa dans src/server/swagger.rs :\n     crate::modules::{}::handler::get_all,\n     crate::modules::{}::handler::get_by_id,\n     crate::modules::{}::handler::create,\n     crate::modules::{}::handler::update,\n     crate::modules::{}::handler::delete,\n",
         module.snake, module.snake, module.snake, module.snake, module.snake
     );
     println!(
-        "  7. Ajoute les schemas utoipa dans src/launch/swagger.rs :\n     {}Response,\n     Create{}Request,\n     Update{}Request,\n",
+        "  7. Ajoute les schemas utoipa dans src/server/swagger.rs :\n     {}Response,\n     Create{}Request,\n     Update{}Request,\n",
         module.pascal, module.pascal, module.pascal
     );
 }
@@ -637,7 +637,7 @@ fn template_handler(m: &ModuleNames) -> String {
 use crate::core::errors::{{ApiError, ErrorResponse}};
 use crate::core::pagination::PaginationParams;
 use crate::core::validator::{{ValidatedJson, ValidatedPath, ValidatedQuery}};
-use crate::infra::state::AppState;
+use crate::config::state::AppState;
 use crate::modules::auth::helpers::Claims;
 use crate::modules::{snake}::dto::{{Create{pascal}Request, {pascal}Response, Update{pascal}Request}};
 use crate::modules::{snake}::params::{{  {pascal}IdParams, {pascal}Query}};
@@ -766,7 +766,7 @@ use axum::middleware::from_fn_with_state;
 
 use crate::core::middlewares::auth::require_auth;
 use crate::core::middlewares::rate_limit::rate_limit_by_user;
-use crate::infra::state::AppState;
+use crate::config::state::AppState;
 
 pub mod dto;
 pub mod handler;

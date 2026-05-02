@@ -1,12 +1,12 @@
 # Génère un module complet
 
-cargo run --bin generate -- generate invoice
-cargo run --bin generate -- generate blog_post   # snake_case
-cargo run --bin generate -- generate BlogPost    # PascalCase accepté aussi
+make module-gen invoice
+make module-gen blog_post   # snake_case
+make module-gen BlogPost    # PascalCase accepté aussi
 
 ## Supprime un module
 
-cargo run --bin generate -- delete invoice
+make module-del invoice
 
 ## Ce qui est généré automatiquement
 

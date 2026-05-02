@@ -1,9 +1,7 @@
-use crate::infra::state::AppState;
+use crate::config::state::AppState;
 use crate::modules::{auth, health, post, user};
 use axum::Router;
 
-/// Assemble tous les routers des modules en un seul router racine.
-/// Branché sur `/api` dans server.rs via `.nest("/api", create_router(state))`.
 pub fn create_router(state: AppState) -> Router {
     Router::new()
         .merge(health::routes())

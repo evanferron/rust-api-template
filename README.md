@@ -33,7 +33,7 @@ cp .env.example .env
 diesel migration run
 
 # 5. Démarrer le serveur
-cargo run
+make run
 
 # API disponible sur http://localhost:8080
 # Swagger UI sur http://localhost:8080/swagger-ui
@@ -62,8 +62,8 @@ cargo run
 src/
 ├── core/          ← erreurs, validation, middlewares, repository générique
 ├── db/            ← modèles et repositories Diesel (un dossier par entité)
-├── infra/         ← Config, AppState
-├── launch/        ← assemblage du router, Swagger
+├── config/         ← Config, AppState
+├── server/        ← assemblage du router, Swagger
 ├── modules/       ← logique métier (auth, user, post...)
 └── bin/
     └── generate.rs ← générateur de modules
@@ -74,7 +74,7 @@ src/
 ## Ajouter un module
 
 ```bash
-cargo run --bin generate -- generate <nom>
+make module-gen <nom>
 ```
 
 Génère automatiquement la migration, le modèle, le repository, les DTOs, le service, le handler et les routes.
@@ -84,7 +84,7 @@ Ensuite :
 1. Compléter `migrations/.../up.sql`
 2. `diesel migration run`
 3. Ajouter `pub mod <nom>;` dans `src/db/mod.rs` et `src/modules/mod.rs`
-4. Brancher dans `src/launch/router.rs`
+4. Brancher dans `src/server/router.rs`
 
 ---
 

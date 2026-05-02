@@ -17,8 +17,8 @@
 src/
 ├── core/          ← erreurs, logger, middlewares, repository générique, validator
 ├── db/            ← schema.rs (généré Diesel), modèles et repositories par entité
-├── infra/         ← Config::from_env(), AppState (pool + config + rate_limit)
-├── launch/        ← router.rs (assemblage des routes), swagger.rs (OpenAPI)
+├── config/         ← Config::from_env(), AppState (pool + config + rate_limit)
+├── server/        ← router.rs (assemblage des routes), swagger.rs (OpenAPI)
 ├── modules/       ← auth, health, user, post — chacun a dto/handler/service/mod
 ├── bin/
 │   └── generate.rs ← CLI scaffold pour générer de nouveaux modules
@@ -133,7 +133,7 @@ Ensuite :
 1. Compléter `up.sql` avec les colonnes
 2. `diesel migration run`
 3. Ajouter `pub mod <nom>;` dans `src/db/mod.rs` et `src/modules/mod.rs`
-4. Brancher les routes dans `src/launch/router.rs`
+4. Brancher les routes dans `src/server/router.rs`
 
 ## Relations Diesel (One-to-Many)
 

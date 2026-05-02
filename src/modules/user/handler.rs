@@ -7,7 +7,7 @@ use crate::core::{
 use crate::core::{params::UuidParam, validator::ValidatedJson};
 use crate::modules::auth::helpers::Claims;
 use crate::modules::user::dto::{UpdateUserRequest, UserResponse};
-use crate::{infra::state::AppState, modules::user::service};
+use crate::{config::state::AppState, modules::user::service};
 
 #[utoipa::path(
     get, path = "/api/users", tag = "users",

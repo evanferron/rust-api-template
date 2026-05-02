@@ -1,6 +1,6 @@
-use app::infra::config::Config;
-use app::infra::state::AppState;
-use app::{core::middlewares::rate_limit::RateLimitStore, launch::router::create_router};
+use app::config::config::Config;
+use app::config::state::AppState;
+use app::{core::middlewares::rate_limit::RateLimitStore, server::router::create_router};
 use axum::Router;
 use diesel::Connection;
 use diesel::pg::PgConnection;
