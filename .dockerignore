@@ -1,5 +1,26 @@
-# .dockerignore
+# Fichiers de build Rust (LE PLUS IMPORTANT)
 target/
-.env
+**/*.rs.bk
+
+# Git
 .git/
-tests/
+.gitignore
+
+# Environnement et secrets
+.env
+.env.example
+
+# CI/CD et déploiement
+.github/
+docker-compose.yml
+render.yaml
+Dockerfile
+
+# Documentation et outils externes
+docs/
+script/
+sonar-project.properties
+README.md
+
+# Fichiers IA
+.copilot-instructions.md
