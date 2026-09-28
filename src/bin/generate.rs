@@ -389,7 +389,7 @@ impl {pascal}Repository {{
     pub async fn find_paginated_by_user(
         conn: &mut AsyncPgConnection,
         user_id: Uuid,
-        params: crate::core::pagination::PaginationParams,
+        params: crate::core::repository::PaginationParams,
     ) -> Result<Vec<{pascal}>, ApiError> {{
         dsl::{snake}s
             .filter(dsl::user_id.eq(user_id))
@@ -543,7 +543,7 @@ fn template_service(m: &ModuleNames) -> String {
 use uuid::Uuid;
 
 use crate::core::errors::ApiError;
-use crate::core::pagination::PaginationParams;
+use crate::core::repository::PaginationParams;
 use crate::db::{snake}::model::{{New{pascal}, {pascal}Changeset}};
 use crate::db::{snake}::repository::{pascal}Repository;
 use crate::modules::{snake}::dto::{{Create{pascal}Request, {pascal}Response, Update{pascal}Request}};
@@ -635,7 +635,7 @@ fn template_handler(m: &ModuleNames) -> String {
 }};
 
 use crate::core::errors::{{ApiError, ErrorResponse}};
-use crate::core::pagination::PaginationParams;
+use crate::core::repository::PaginationParams;
 use crate::core::validator::{{ValidatedJson, ValidatedPath, ValidatedQuery}};
 use crate::infra::state::AppState;
 use crate::modules::auth::helpers::Claims;
