@@ -1,15 +1,22 @@
 //! Pagination : paramètres de query, paramètres normalisés et réponse paginée.
 
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use validator::Validate;
 
 /// Query `?page=&per_page=` (validée par `ValidatedQuery`).
-#[derive(Deserialize, Validate)]
+///
+/// Documentation OpenAPI : `params(PaginationQuery)` dans `#[utoipa::path]`.
+#[derive(Deserialize, Validate, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct PaginationQuery {
+    /// Numéro de page (défaut : 1)
     #[validate(range(min = 1))]
+    #[param(minimum = 1)]
     pub page: Option<i64>,
+    /// Éléments par page (défaut : 20, max : 100)
     #[validate(range(min = 1, max = 100))]
+    #[param(minimum = 1, maximum = 100)]
     pub per_page: Option<i64>,
 }
 

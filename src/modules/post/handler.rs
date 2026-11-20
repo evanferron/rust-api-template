@@ -9,10 +9,7 @@ use axum::{Json, extract::State, http::StatusCode};
 #[utoipa::path(
     get, path = "/posts", tag = "posts",
     security(("bearer_auth" = [])),
-    params(
-        ("page" = Option<i64>, Query, description = "Numéro de page (défaut: 1)"),
-        ("per_page" = Option<i64>, Query, description = "Éléments par page (défaut: 20, max: 100)"),
-    ),
+    params(PaginationQuery),
     responses(
         (status = 200, body = PaginatedResponse<PostResponse>),
         (status = 401, body = ErrorResponse),
