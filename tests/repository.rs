@@ -6,6 +6,9 @@
 //!
 //! Requiert `DATABASE_TEST_URL`.
 
+#[allow(dead_code)] // seuls quelques helpers de `common` sont utilisés ici
+mod common;
+
 use api::db::post::model::{NewPost, Post};
 use api::db::post::repository::PostRepository;
 use api::db::repository::prelude::*;
@@ -24,14 +27,9 @@ static MIGRATED: OnceCell<()> = OnceCell::const_new();
 // Setup
 // ---------------------------------------------------------------------------
 
-fn test_db_url() -> String {
-    dotenvy::dotenv().ok();
-    std::env::var("DATABASE_TEST_URL").expect("DATABASE_TEST_URL must be set")
-}
-
 /// Connexion dans une transaction de test (rollback automatique au drop).
 async fn test_conn() -> AsyncPgConnection {
-    let url = test_db_url();
+    let url = common::test_db_url();
     MIGRATED
         .get_or_init(|| async {
             api::db::run_migrations(&url).await.expect("run migrations");
