@@ -28,15 +28,12 @@ pub async fn update(
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("User '{}' not found", id)))?;
 
+    // La présence de current_password quand new_password est fourni
+    // est garantie par la validation du DTO (validate_password_change).
     let new_password = match (&payload.new_password, &payload.current_password) {
         (Some(new_pwd), Some(current_pwd)) => {
             verify_password(current_pwd, &user.password).await?;
             Some(hash_password(new_pwd).await?)
-        }
-        (Some(_), None) => {
-            return Err(ApiError::BadRequest(
-                "Current password is required".to_string(),
-            ));
         }
         _ => None,
     };
