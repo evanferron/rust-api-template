@@ -12,7 +12,7 @@ use api::db::repository::prelude::*;
 use api::db::schema::{posts, users};
 use api::db::user::model::{NewUser, User};
 use api::db::user::repository::UserRepository;
-use chrono::{Duration, NaiveDateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
 use tokio::sync::OnceCell;
@@ -63,7 +63,7 @@ async fn seed_user(conn: &mut AsyncPgConnection) -> User {
 }
 
 /// Crée un post avec un `created_at` contrôlé (pour tester l'ordre de pagination).
-async fn seed_post(conn: &mut AsyncPgConnection, user_id: Uuid, created_at: NaiveDateTime) -> Post {
+async fn seed_post(conn: &mut AsyncPgConnection, user_id: Uuid, created_at: DateTime<Utc>) -> Post {
     let post = PostRepository::create(
         conn,
         NewPost {
@@ -100,7 +100,7 @@ diesel::table! {
     soft_items (id) {
         id -> Uuid,
         name -> Text,
-        deleted_at -> Nullable<Timestamp>,
+        deleted_at -> Nullable<Timestamptz>,
     }
 }
 
@@ -110,7 +110,7 @@ diesel::table! {
 struct SoftItem {
     id: Uuid,
     name: String,
-    deleted_at: Option<NaiveDateTime>,
+    deleted_at: Option<DateTime<Utc>>,
 }
 
 struct SoftItemRepo;
@@ -119,7 +119,7 @@ api::impl_find_by_id!(SoftItemRepo, SoftItem, crate::soft_items, Uuid);
 
 async fn create_soft_items_table(conn: &mut AsyncPgConnection) {
     diesel::sql_query(
-        "CREATE TEMP TABLE soft_items (id UUID PRIMARY KEY, name TEXT NOT NULL, deleted_at TIMESTAMP NULL)",
+        "CREATE TEMP TABLE soft_items (id UUID PRIMARY KEY, name TEXT NOT NULL, deleted_at TIMESTAMPTZ NULL)",
     )
     .execute(conn)
     .await
@@ -250,7 +250,7 @@ async fn find_paginated_by_filters_and_orders_desc() {
     let owner = seed_user(&mut conn).await;
     let other = seed_user(&mut conn).await;
 
-    let base = Utc::now().naive_utc();
+    let base = Utc::now();
     let mut expected = Vec::new();
     for i in 0..5 {
         expected.push(
@@ -292,7 +292,7 @@ async fn find_paginated_by_filters_and_orders_desc() {
 async fn find_paginated_by_beyond_last_page_is_empty() {
     let mut conn = test_conn().await;
     let owner = seed_user(&mut conn).await;
-    seed_post(&mut conn, owner.id, Utc::now().naive_utc()).await;
+    seed_post(&mut conn, owner.id, Utc::now()).await;
 
     let owner_id = owner.id;
     let page = PostRepository::find_paginated_by(&mut conn, PaginationParams::new(5, 10), || {

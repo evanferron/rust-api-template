@@ -32,7 +32,7 @@
 //! | [`Exists`] | [`impl_exists!`] | `exists` | — |
 //! | [`Count`] | [`impl_count!`] | `count` | — |
 //! | [`Paginate`] | [`impl_paginate!`] | `find_paginated`, `find_paginated_by` | colonne de tri, clé primaire simple |
-//! | [`SoftDelete`] | [`impl_soft_delete!`] | `soft_delete`, `find_active`, `restore` | colonne `deleted_at TIMESTAMP NULL` |
+//! | [`SoftDelete`] | [`impl_soft_delete!`] | `soft_delete`, `find_active`, `restore` | colonne `deleted_at TIMESTAMPTZ NULL` |
 //! | [`BaseRepository`] | [`impl_base_repository!`] | `FindAll` + `FindById` + `Delete` | — |
 //!
 //! `BaseRepository` est un supertrait implémenté automatiquement pour tout type
@@ -138,7 +138,7 @@ pub trait Paginate<M> {
         F: Fn() -> Filter<Self::Table> + Send;
 }
 
-/// Suppression logique via une colonne `deleted_at TIMESTAMP NULL`.
+/// Suppression logique via une colonne `deleted_at TIMESTAMPTZ NULL`.
 pub trait SoftDelete<M, Id> {
     /// `deleted_at = NOW()` → `true` si une ligne a été modifiée.
     fn soft_delete(
@@ -401,7 +401,7 @@ macro_rules! impl_paginate {
     };
 }
 
-/// Implémente [`SoftDelete`]. La table doit avoir une colonne `deleted_at TIMESTAMP NULL`.
+/// Implémente [`SoftDelete`]. La table doit avoir une colonne `deleted_at TIMESTAMPTZ NULL`.
 ///
 /// ```rust,ignore
 /// impl_soft_delete!(PostRepository, Post, crate::db::schema::posts, Uuid);
@@ -419,7 +419,7 @@ macro_rules! impl_soft_delete {
                 use $table as _table;
 
                 let rows = diesel::update(_table::table.find(id))
-                    .set(_table::deleted_at.eq(diesel::dsl::now.nullable()))
+                    .set(_table::deleted_at.eq(diesel::dsl::now))
                     .execute(conn)
                     .await
                     .map_err($crate::common::error::ApiError::from)?;
@@ -450,7 +450,7 @@ macro_rules! impl_soft_delete {
                 use $table as _table;
 
                 let rows = diesel::update(_table::table.find(id))
-                    .set(_table::deleted_at.eq(None::<chrono::NaiveDateTime>))
+                    .set(_table::deleted_at.eq(None::<chrono::DateTime<chrono::Utc>>))
                     .execute(conn)
                     .await
                     .map_err($crate::common::error::ApiError::from)?;

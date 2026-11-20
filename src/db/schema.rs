@@ -8,8 +8,8 @@ diesel::table! {
         title -> Varchar,
         content -> Text,
         published -> Bool,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
     }
 }
 
@@ -24,8 +24,8 @@ diesel::table! {
         first_name -> Varchar,
         #[max_length = 100]
         last_name -> Varchar,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
     }
 }
 
