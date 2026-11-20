@@ -246,7 +246,7 @@ JWT_REFRESH_SECRET=<générer avec openssl rand -base64 64>
 | `ci.yml` — Tests & Coverage | chaque push / PR | tous les tests sur PostgreSQL 16 + couverture (`cargo llvm-cov`) → SonarCloud | oui |
 | `security-audit.yml` | quotidien · modification de `Cargo.toml` / `Cargo.lock` · manuel | `cargo audit` (base RustSec) | non |
 
-L'audit est séparé de la CI pour qu'une vulnérabilité découverte dans une dépendance n'empêche pas de livrer un hotfix : le workflow passe au rouge (notification GitHub) et la correction se fait par une mise à jour de la dépendance. Ne pas le déclarer comme *required status check*.
+L'audit est séparé de la CI pour qu'une vulnérabilité découverte dans une dépendance n'empêche pas de livrer un hotfix : le workflow passe au rouge (notification GitHub) et la correction arrive par une PR Dependabot. Ne pas le déclarer comme *required status check*.
 
 Pour reproduire la CI en local :
 
@@ -255,6 +255,16 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test && 
 ```
 
 Le scan SonarCloud ne s'exécute que si le secret `SONAR_TOKEN` est configuré.
+
+### Dependabot
+
+`.github/dependabot.yml` ouvre chaque lundi des PR de mise à jour :
+
+- **crates** : mineures et correctifs regroupés dans une PR, montées majeures séparées ;
+- **actions GitHub** : regroupées dans une PR ;
+- **images Docker** (`rust`, `debian`) du `Dockerfile`.
+
+À activer une fois dans *Settings → Code security* : **Dependabot alerts** et **Dependabot security updates** (PR immédiates pour les dépendances vulnérables).
 
 -----|----------|
 | Format & Clippy | `cargo fmt --check` · `cargo clippy --all-targets -- -D warnings` |

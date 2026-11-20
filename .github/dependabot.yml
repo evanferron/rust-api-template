@@ -1,0 +1,50 @@
+# Mises à jour automatiques des dépendances (PR hebdomadaires).
+#
+# Les PR de sécurité (dépendance vulnérable) sont ouvertes immédiatement, indépendamment de ce
+# planning, si "Dependabot security updates" est activé dans Settings > Code security.
+
+version: 2
+
+updates:
+  # Crates Rust
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: deps
+    groups:
+      # Mises à jour mineures et correctifs regroupés dans une seule PR.
+      # Les montées majeures restent des PR séparées (changements cassants probables).
+      cargo-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  # Actions utilisées par les workflows
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    commit-message:
+      prefix: ci
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  # Images de base du Dockerfile (rust, debian)
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    commit-message:
+      prefix: docker
