@@ -4,6 +4,6 @@ use dotenvy::dotenv;
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
-    let config = Config::from_env().expect("Failed to load config");
+    let config = Config::from_env();
     Server::new(config).run().await
 }

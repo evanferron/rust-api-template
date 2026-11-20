@@ -10,7 +10,11 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from_env() -> Result<Self, anyhow::Error> {
+    /// Charge la configuration depuis les variables d'environnement.
+    ///
+    /// Panique si une variable obligatoire est absente
+    /// (`DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`).
+    pub fn from_env() -> Self {
         let server = ServerConfig {
             host: env::var("SERVER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string()),
             port: env::var("SERVER_PORT")
@@ -53,10 +57,10 @@ impl Config {
                 .unwrap_or(604800),
         };
 
-        Ok(Config {
+        Config {
             server,
             database,
             jwt,
-        })
+        }
     }
 }

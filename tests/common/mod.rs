@@ -59,7 +59,7 @@ pub fn reset_db() {
 
 pub fn test_config() -> Config {
     dotenvy::dotenv().ok();
-    Config::from_env().expect("Failed to load test config")
+    Config::from_env()
 }
 
 // ---------------------------------------------------------------------------
