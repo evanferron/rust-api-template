@@ -1,4 +1,5 @@
-use axum::{Router, routing::post};
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
 use crate::common::state::AppState;
 
@@ -9,10 +10,10 @@ pub mod service;
 
 /// Routes publiques d'authentification.
 /// register / login / refresh sont limités par IP via l'extracteur `AuthRateLimit`.
-pub fn routes() -> Router<AppState> {
-    Router::new()
-        .route("/auth/register", post(handler::register))
-        .route("/auth/login", post(handler::login))
-        .route("/auth/refresh", post(handler::refresh))
-        .route("/auth/logout", post(handler::logout))
+pub fn routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(handler::register))
+        .routes(routes!(handler::login))
+        .routes(routes!(handler::refresh))
+        .routes(routes!(handler::logout))
 }

@@ -321,6 +321,7 @@ pub struct ErrorResponse {
     pub detail: String,
     /// Erreurs par champ (uniquement pour `VALIDATION_FAILED`).
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<HashMap<String, Vec<String>>>, example = json!({"email": ["Invalid email address"]}))]
     pub errors: Option<FieldErrors>,
     /// Identifiant de la requête (aussi dans l'en-tête `x-request-id` et les logs).
     #[serde(skip_serializing_if = "Option::is_none")]

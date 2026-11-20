@@ -5,7 +5,7 @@ use crate::modules::health::dto::HealthResponse;
 /// Vérifie que le serveur est opérationnel.
 #[utoipa::path(
     get,
-    path = "/api/health",
+    path = "/health",
     tag = "health",
     responses(
         (status = 200, description = "Serveur opérationnel", body = HealthResponse),

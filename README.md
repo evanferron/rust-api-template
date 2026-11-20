@@ -85,7 +85,9 @@ Prendre le module `post` comme référence (`src/db/post/` + `src/modules/post/`
 2. `diesel migration run` (régénère `src/db/schema.rs`)
 3. Créer `src/db/<nom>/` (model + repository) et `src/modules/<nom>/` (dto, service, handler, routes)
 4. Ajouter `pub mod <nom>;` dans `src/db/mod.rs` et `src/modules/mod.rs`
-5. Brancher les routes dans `src/app/mod.rs` et les déclarer dans `src/app/openapi.rs`
+5. Ajouter `.merge(<nom>::routes())` dans `api_router()` (`src/app/mod.rs`)
+
+Les routes sont déclarées avec `#[utoipa::path]` sur chaque handler et enregistrées via `routes!(...)` dans le `mod.rs` du module : le chemin, la méthode et la documentation OpenAPI viennent de la même déclaration.
 
 ---
 

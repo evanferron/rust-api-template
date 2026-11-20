@@ -7,7 +7,7 @@ use crate::modules::post::service;
 use axum::{Json, extract::State, http::StatusCode};
 
 #[utoipa::path(
-    get, path = "/api/posts", tag = "posts",
+    get, path = "/posts", tag = "posts",
     security(("bearer_auth" = [])),
     params(
         ("page" = Option<i64>, Query, description = "Numéro de page (défaut: 1)"),
@@ -31,7 +31,7 @@ pub async fn get_all(
 }
 
 #[utoipa::path(
-    get, path = "/api/posts/{id}", tag = "posts",
+    get, path = "/posts/{id}", tag = "posts",
     security(("bearer_auth" = [])),
     params(("id" = Uuid, Path, description = "UUID du post")),
     responses(
@@ -50,7 +50,7 @@ pub async fn get_by_id(
 }
 
 #[utoipa::path(
-    post, path = "/api/posts", tag = "posts",
+    post, path = "/posts", tag = "posts",
     security(("bearer_auth" = [])),
     request_body = CreatePostRequest,
     responses(
@@ -70,7 +70,7 @@ pub async fn create(
 }
 
 #[utoipa::path(
-    put, path = "/api/posts/{id}", tag = "posts",
+    put, path = "/posts/{id}", tag = "posts",
     security(("bearer_auth" = [])),
     params(("id" = Uuid, Path, description = "UUID du post")),
     request_body = UpdatePostRequest,
@@ -95,7 +95,7 @@ pub async fn update(
 }
 
 #[utoipa::path(
-    delete, path = "/api/posts/{id}", tag = "posts",
+    delete, path = "/posts/{id}", tag = "posts",
     security(("bearer_auth" = [])),
     params(("id" = Uuid, Path, description = "UUID du post")),
     responses(

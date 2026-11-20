@@ -16,7 +16,7 @@ use crate::modules::user::dto::UserResponse;
 
 #[utoipa::path(
     post,
-    path = "/api/auth/register",
+    path = "/auth/register",
     tag = "auth",
     request_body = RegisterRequest,
     responses(
@@ -41,7 +41,7 @@ pub async fn register(
 
 #[utoipa::path(
     post,
-    path = "/api/auth/login",
+    path = "/auth/login",
     tag = "auth",
     request_body = LoginRequest,
     responses(
@@ -78,7 +78,7 @@ pub async fn login(
 
 #[utoipa::path(
     post,
-    path = "/api/auth/refresh",
+    path = "/auth/refresh",
     tag = "auth",
     params(
         ("refresh_token" = String, Cookie, description = "Refresh token HttpOnly")
@@ -117,11 +117,10 @@ pub async fn refresh(
 
 #[utoipa::path(
     post,
-    path = "/api/auth/logout",
+    path = "/auth/logout",
     tag = "auth",
     responses(
         (status = 204, description = "Déconnexion réussie — cookie supprimé"),
-        (status = 401, description = "Non authentifié", body = ErrorResponse),
     )
 )]
 pub async fn logout(jar: CookieJar) -> impl IntoResponse {

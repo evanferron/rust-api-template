@@ -1,4 +1,5 @@
-use axum::{Router, routing::get};
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
 use crate::common::state::AppState;
 
@@ -7,11 +8,13 @@ pub mod handler;
 pub mod service;
 
 /// Routes des utilisateurs (authentifiées via l'extracteur `AuthUser`).
-pub fn routes() -> Router<AppState> {
-    Router::new().route("/users", get(handler::get_all)).route(
-        "/users/{id}",
-        get(handler::get_by_id)
-            .put(handler::update)
-            .delete(handler::delete),
-    )
+/// Le chemin et la méthode de chaque route sont ceux déclarés dans `#[utoipa::path]`.
+pub fn routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(handler::get_all))
+        .routes(routes!(
+            handler::get_by_id,
+            handler::update,
+            handler::delete
+        ))
 }

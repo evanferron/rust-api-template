@@ -22,6 +22,7 @@ use tower_http::cors::CorsLayer;
 use tower_http::trace::{DefaultOnFailure, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 use utoipa::OpenApi;
+use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::common::error;
@@ -35,13 +36,37 @@ const BODY_LIMIT: usize = 1024 * 1024;
 /// Durée maximale de traitement d'une requête.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// Routes des modules, montées sous `/api`, avec leur documentation OpenAPI.
+///
+/// **Ajouter un module** : une ligne `.merge(<module>::routes())` ici.
+fn api_router() -> OpenApiRouter<AppState> {
+    let modules = OpenApiRouter::new()
+        .merge(health::routes())
+        .merge(auth::routes())
+        .merge(user::routes())
+        .merge(post::routes());
+
+    OpenApiRouter::with_openapi(openapi::ApiDoc::openapi()).nest("/api", modules)
+}
+
+/// Documentation OpenAPI complète (servie sur `/api-docs/openapi.json`).
+pub fn openapi_doc() -> utoipa::openapi::OpenApi {
+    api_router().into_openapi()
+}
+
 /// Construit le router complet : `/api/*`, Swagger UI, fallbacks et couches.
 pub fn build_app(state: AppState) -> Router {
+    let (api, doc) = api_router().split_for_parts();
+    let api = api
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            rate_limit,
+        )) // par user ou IP
+        .with_state(state);
+
     Router::new()
-        .merge(
-            SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", openapi::ApiDoc::openapi()),
-        )
-        .nest("/api", api_routes(state.clone()))
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", doc))
+        .merge(api)
         // Routes et méthodes inconnues → 404 / 405 au format JSON
         .fallback(error::route_not_found)
         .method_not_allowed_fallback(error::method_not_allowed)
@@ -63,20 +88,6 @@ pub fn build_app(state: AppState) -> Router {
                 .on_failure(DefaultOnFailure::new().level(Level::ERROR)),
         )
         .layer(axum::middleware::from_fn(request_id)) // la plus externe : tout est tracé avec un id
-}
-
-/// Routes des modules, montées sous `/api`, avec le rate limit global.
-fn api_routes(state: AppState) -> Router {
-    Router::new()
-        .merge(health::routes())
-        .merge(auth::routes())
-        .merge(user::routes())
-        .merge(post::routes())
-        .layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            rate_limit,
-        ))
-        .with_state(state)
 }
 
 fn cors() -> CorsLayer {

@@ -7,7 +7,7 @@ use crate::modules::user::dto::{UpdateUserRequest, UserResponse};
 use crate::modules::user::service;
 
 #[utoipa::path(
-    get, path = "/api/users", tag = "users",
+    get, path = "/users", tag = "users",
     security(("bearer_auth" = [])),
     responses(
         (status = 200, body = Vec<UserResponse>),
@@ -23,7 +23,7 @@ pub async fn get_all(
 }
 
 #[utoipa::path(
-    get, path = "/api/users/{id}", tag = "users",
+    get, path = "/users/{id}", tag = "users",
     security(("bearer_auth" = [])),
     params(("id" = Uuid, Path, description = "UUID de l'utilisateur")),
     responses(
@@ -42,7 +42,7 @@ pub async fn get_by_id(
 }
 
 #[utoipa::path(
-    put, path = "/api/users/{id}", tag = "users",
+    put, path = "/users/{id}", tag = "users",
     security(("bearer_auth" = [])),
     params(("id" = Uuid, Path, description = "UUID de l'utilisateur")),
     request_body = UpdateUserRequest,
@@ -70,7 +70,7 @@ pub async fn update(
 }
 
 #[utoipa::path(
-    delete, path = "/api/users/{id}", tag = "users",
+    delete, path = "/users/{id}", tag = "users",
     security(("bearer_auth" = [])),
     params(("id" = Uuid, Path, description = "UUID de l'utilisateur")),
     responses(

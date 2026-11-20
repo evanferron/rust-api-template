@@ -1,47 +1,14 @@
+//! Informations générales de la documentation OpenAPI.
+//!
+//! Les routes et schémas ne sont **pas** listés ici : chaque module les déclare via
+//! `utoipa_axum` (`OpenApiRouter::routes(routes!(...))`) et ils sont collectés automatiquement.
+
 use utoipa::Modify;
 use utoipa::OpenApi;
 use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
 
-use crate::common::error::{ErrorCode, ErrorResponse};
-use crate::modules::auth::dto::{LoginRequest, LoginResponse, RefreshResponse, RegisterRequest};
-use crate::modules::health::dto::HealthResponse;
-use crate::modules::post::dto::{CreatePostRequest, PostResponse, UpdatePostRequest};
-use crate::modules::user::dto::{UpdateUserRequest, UserResponse};
-
 #[derive(OpenApi)]
 #[openapi(
-    paths(
-        crate::modules::health::handler::health_check,
-        crate::modules::auth::handler::register,
-        crate::modules::auth::handler::login,
-        crate::modules::auth::handler::refresh,
-        crate::modules::user::handler::get_all,
-        crate::modules::user::handler::get_by_id,
-        crate::modules::user::handler::update,
-        crate::modules::user::handler::delete,
-        crate::modules::auth::handler::logout,
-        crate::modules::post::handler::get_all,
-        crate::modules::post::handler::get_by_id,
-        crate::modules::post::handler::create,
-        crate::modules::post::handler::update,
-        crate::modules::post::handler::delete,
-    ),
-    components(
-        schemas(
-            ErrorResponse,
-            ErrorCode,
-            HealthResponse,
-            RegisterRequest,
-            LoginRequest,
-            LoginResponse,
-            RefreshResponse,
-            UserResponse,
-            UpdateUserRequest,
-            PostResponse,
-            CreatePostRequest,
-            UpdatePostRequest,
-        )
-    ),
     tags(
         (name = "health", description = "Vérification de l'état du serveur"),
         (name = "auth",   description = "Authentification et gestion des tokens"),
@@ -84,12 +51,11 @@ impl Modify for SecurityAddon {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use utoipa::OpenApi;
 
     // ─── Helper ─────────────────────────────────────────────────────────────
 
     fn build_doc() -> utoipa::openapi::OpenApi {
-        ApiDoc::openapi()
+        crate::app::openapi_doc()
     }
 
     // ─── Tags ────────────────────────────────────────────────────────────────
@@ -164,6 +130,8 @@ mod tests {
 
         let expected = [
             "ErrorResponse",
+            "ErrorCode",
+            "PaginatedResponse_PostResponse",
             "HealthResponse",
             "RegisterRequest",
             "LoginRequest",
