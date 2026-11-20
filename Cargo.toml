@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.89"
 
+# Les exemples de la doc (`rust,ignore`) illustrent l'usage et ne sont pas exécutables :
+# pas de doctests, `cargo test` ne les liste plus comme « ignored ».
+[lib]
+doctest = false
+
 [[bin]]
 name = "server"
 path = "src/main.rs"
