@@ -3,6 +3,7 @@
 //! Les deux types de tokens partagent `Claims` mais sont signés avec des secrets distincts
 //! (`config.jwt.secret` / `config.jwt.refresh_secret`).
 
+use axum::http::{HeaderMap, header::AUTHORIZATION};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, TokenData, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
@@ -26,6 +27,20 @@ pub struct Claims {
     pub iat: i64,
     /// Expiration (timestamp Unix)
     pub exp: i64,
+}
+
+// ---------------------------------------------------------------------------
+// En-tête Authorization
+// ---------------------------------------------------------------------------
+
+/// Token de l'en-tête `Authorization: Bearer <token>`, s'il est présent et bien formé.
+pub fn bearer_token(headers: &HeaderMap) -> Option<&str> {
+    headers
+        .get(AUTHORIZATION)?
+        .to_str()
+        .ok()?
+        .strip_prefix("Bearer ")
+        .filter(|token| !token.is_empty())
 }
 
 // ---------------------------------------------------------------------------
@@ -124,6 +139,18 @@ pub fn verify_refresh_token(token: &str, secret: &str) -> Result<Claims, ApiErro
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bearer_token_parsing() {
+        let mut headers = HeaderMap::new();
+        assert_eq!(bearer_token(&headers), None);
+        headers.insert(AUTHORIZATION, "Basic abc".parse().unwrap());
+        assert_eq!(bearer_token(&headers), None);
+        headers.insert(AUTHORIZATION, "Bearer ".parse().unwrap());
+        assert_eq!(bearer_token(&headers), None);
+        headers.insert(AUTHORIZATION, "Bearer abc.def".parse().unwrap());
+        assert_eq!(bearer_token(&headers), Some("abc.def"));
+    }
 
     #[test]
     fn test_create_and_verify_token() {

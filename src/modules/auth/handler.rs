@@ -4,6 +4,7 @@ use time::Duration;
 
 use crate::common::error::{ApiError, ErrorCode, ErrorResponse};
 use crate::common::extract::ValidatedJson;
+use crate::common::middlewares::rate_limit::AuthRateLimit;
 use crate::common::state::AppState;
 use crate::modules::auth::dto::{LoginRequest, LoginResponse, RefreshResponse, RegisterRequest};
 use crate::modules::auth::service;
@@ -25,6 +26,7 @@ use crate::modules::user::dto::UserResponse;
     )
 )]
 pub async fn register(
+    _: AuthRateLimit,
     State(state): State<AppState>,
     ValidatedJson(payload): ValidatedJson<RegisterRequest>,
 ) -> Result<(StatusCode, Json<UserResponse>), ApiError> {
@@ -49,6 +51,7 @@ pub async fn register(
     )
 )]
 pub async fn login(
+    _: AuthRateLimit,
     State(state): State<AppState>,
     jar: CookieJar,
     ValidatedJson(payload): ValidatedJson<LoginRequest>,
@@ -86,6 +89,7 @@ pub async fn login(
     )
 )]
 pub async fn refresh(
+    _: AuthRateLimit,
     State(state): State<AppState>,
     jar: CookieJar,
 ) -> Result<impl IntoResponse, ApiError> {

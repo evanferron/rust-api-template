@@ -25,6 +25,7 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::common::error;
+use crate::common::middlewares::rate_limit::rate_limit;
 use crate::common::middlewares::request_id::{X_REQUEST_ID, request_id};
 use crate::common::state::AppState;
 use crate::modules::{auth, health, post, user};
@@ -40,7 +41,7 @@ pub fn build_app(state: AppState) -> Router {
         .merge(
             SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", openapi::ApiDoc::openapi()),
         )
-        .nest("/api", api_routes(state))
+        .nest("/api", api_routes(state.clone()))
         // Routes et méthodes inconnues → 404 / 405 au format JSON
         .fallback(error::route_not_found)
         .method_not_allowed_fallback(error::method_not_allowed)
@@ -64,13 +65,18 @@ pub fn build_app(state: AppState) -> Router {
         .layer(axum::middleware::from_fn(request_id)) // la plus externe : tout est tracé avec un id
 }
 
-/// Routes des modules, montées sous `/api`.
+/// Routes des modules, montées sous `/api`, avec le rate limit global.
 fn api_routes(state: AppState) -> Router {
     Router::new()
         .merge(health::routes())
-        .merge(auth::routes(state.clone()))
-        .merge(user::routes(state.clone()))
-        .merge(post::routes(state))
+        .merge(auth::routes())
+        .merge(user::routes())
+        .merge(post::routes())
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            rate_limit,
+        ))
+        .with_state(state)
 }
 
 fn cors() -> CorsLayer {

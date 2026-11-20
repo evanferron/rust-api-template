@@ -1,8 +1,7 @@
-use axum::{Extension, Json, extract::State, http::StatusCode};
+use axum::{Json, extract::State, http::StatusCode};
 
 use crate::common::error::{ApiError, ErrorCode, ErrorResponse};
-use crate::common::extract::{UuidParam, ValidatedJson, ValidatedPath};
-use crate::common::jwt::Claims;
+use crate::common::extract::{AuthUser, UuidParam, ValidatedJson, ValidatedPath};
 use crate::common::state::AppState;
 use crate::modules::user::dto::{UpdateUserRequest, UserResponse};
 use crate::modules::user::service;
@@ -17,7 +16,7 @@ use crate::modules::user::service;
 )]
 pub async fn get_all(
     State(state): State<AppState>,
-    Extension(_claims): Extension<Claims>,
+    _user: AuthUser,
 ) -> Result<Json<Vec<UserResponse>>, ApiError> {
     let mut conn = state.pool.get().await?;
     Ok(Json(service::get_all(&mut conn).await?))
@@ -35,7 +34,7 @@ pub async fn get_all(
 )]
 pub async fn get_by_id(
     State(state): State<AppState>,
-    Extension(_claims): Extension<Claims>,
+    _user: AuthUser,
     ValidatedPath(params): ValidatedPath<UuidParam>,
 ) -> Result<Json<UserResponse>, ApiError> {
     let mut conn = state.pool.get().await?;
@@ -57,11 +56,11 @@ pub async fn get_by_id(
 )]
 pub async fn update(
     State(state): State<AppState>,
-    Extension(claims): Extension<Claims>,
+    user: AuthUser,
     ValidatedPath(params): ValidatedPath<UuidParam>,
     ValidatedJson(payload): ValidatedJson<UpdateUserRequest>,
 ) -> Result<Json<UserResponse>, ApiError> {
-    if claims.sub != params.id {
+    if user.id != params.id {
         return Err(
             ApiError::new(ErrorCode::Forbidden).with_detail("You can only update your own profile")
         );
@@ -83,10 +82,10 @@ pub async fn update(
 )]
 pub async fn delete(
     State(state): State<AppState>,
-    Extension(claims): Extension<Claims>,
+    user: AuthUser,
     ValidatedPath(params): ValidatedPath<UuidParam>,
 ) -> Result<StatusCode, ApiError> {
-    if claims.sub != params.id {
+    if user.id != params.id {
         return Err(
             ApiError::new(ErrorCode::Forbidden).with_detail("You can only delete your own account")
         );

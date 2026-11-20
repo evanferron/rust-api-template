@@ -1,106 +1,109 @@
-use std::net::IpAddr;
+//! Rate limiting (en mémoire, via `governor`).
+//!
+//! Deux niveaux :
+//! - [`rate_limit`] : middleware global sur `/api`. Le client est identifié par son user id
+//!   si un token valide est présent, sinon par son IP.
+//! - [`AuthRateLimit`] : extracteur à ajouter aux handlers sensibles (login, register…),
+//!   avec une limite stricte par IP contre le brute force.
+
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::num::NonZeroU32;
 use std::sync::Arc;
 
-use axum::{
-    extract::{ConnectInfo, Request, State},
-    middleware::Next,
-    response::Response,
-};
+use axum::extract::{ConnectInfo, FromRequestParts, Request, State};
+use axum::http::request::Parts;
+use axum::middleware::Next;
+use axum::response::Response;
 use governor::clock::{Clock, DefaultClock};
 use governor::{NotUntil, Quota, RateLimiter, state::keyed::DefaultKeyedStateStore};
-use std::net::SocketAddr;
 
 use crate::common::error::{ApiError, ErrorCode};
-use crate::common::jwt::Claims;
+use crate::common::jwt::{bearer_token, verify_token};
 use crate::common::state::AppState;
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 type KeyedLimiter<K> = Arc<RateLimiter<K, DefaultKeyedStateStore<K>, DefaultClock>>;
 
-/// Store partagé des rate limiters — un par "profil" de limite.
-/// Clonable car wrappé dans Arc, safe à partager entre threads.
+/// Limiters partagés (clonables, thread-safe).
 #[derive(Clone)]
 pub struct RateLimitStore {
-    /// Limiter par IP — pour les routes publiques
-    pub by_ip: KeyedLimiter<IpAddr>,
-    /// Limiter par user ID — pour les routes protégées
-    pub by_user: KeyedLimiter<String>,
+    /// Limite générale, par user id ou par IP.
+    pub by_client: KeyedLimiter<String>,
+    /// Limite stricte des routes d'authentification, par IP.
+    pub auth: KeyedLimiter<IpAddr>,
 }
 
 impl RateLimitStore {
-    /// `auth_rpm`    — requêtes par minute sur les routes auth (login, register)
-    /// `default_rpm` — requêtes par minute sur les routes protégées
+    /// `auth_rpm` : requêtes/minute sur les routes d'authentification (par IP).
+    /// `default_rpm` : requêtes/minute sur toute l'API (par user ou IP).
     pub fn new(auth_rpm: u32, default_rpm: u32) -> Self {
         Self {
-            by_ip: Arc::new(RateLimiter::keyed(Quota::per_minute(
-                NonZeroU32::new(auth_rpm).unwrap(),
-            ))),
-            by_user: Arc::new(RateLimiter::keyed(Quota::per_minute(
-                NonZeroU32::new(default_rpm).unwrap(),
-            ))),
+            by_client: Arc::new(RateLimiter::keyed(per_minute(default_rpm))),
+            auth: Arc::new(RateLimiter::keyed(per_minute(auth_rpm))),
         }
+    }
+
+    /// Purge les clés inactives (à appeler périodiquement).
+    pub fn retain_recent(&self) {
+        self.by_client.retain_recent();
+        self.auth.retain_recent();
     }
 }
 
-// ---------------------------------------------------------------------------
-// Middleware — routes publiques (par IP)
-// ---------------------------------------------------------------------------
-
-/// Rate limiter pour les routes auth (login, register, refresh).
-/// Identifie le client par son IP.
-/// Recommandé : 10-20 requêtes/minute pour les routes d'auth.
-pub async fn rate_limit_by_ip(
-    State(state): State<AppState>,
-    req: Request,
-    next: Next,
-) -> Result<Response, ApiError> {
-    let ip = req
-        .extensions()
-        .get::<ConnectInfo<SocketAddr>>()
-        .map(|c| c.0.ip())
-        .unwrap_or_else(|| std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST));
-
-    state.rate_limit.by_ip.check_key(&ip).map_err(|not_until| {
-        tracing::warn!(ip = %ip, "Rate limit exceeded (IP)");
-        rate_limited(not_until)
-    })?;
-
-    Ok(next.run(req).await)
+fn per_minute(rpm: u32) -> Quota {
+    Quota::per_minute(NonZeroU32::new(rpm).expect("rate limit must be > 0"))
 }
 
-// ---------------------------------------------------------------------------
-// Middleware — routes protégées (par user)
-// ---------------------------------------------------------------------------
-
-/// Rate limiter pour les routes protégées.
-/// Identifie le client par son UUID utilisateur depuis les claims JWT.
-/// Doit être placé APRÈS `require_auth` dans la chaîne de middleware.
-pub async fn rate_limit_by_user(
+/// Middleware global : identifie le client par son user id (token valide) ou son IP.
+pub async fn rate_limit(
     State(state): State<AppState>,
     req: Request,
     next: Next,
 ) -> Result<Response, ApiError> {
-    // Les claims sont injectés par require_auth avant ce middleware
-    let user_id = req
-        .extensions()
-        .get::<Claims>()
-        .map(|c| c.sub.to_string())
-        .ok_or_else(|| ApiError::internal("rate_limit_by_user must run after require_auth"))?;
+    let key = match bearer_token(req.headers())
+        .and_then(|token| verify_token(token, &state.config.jwt.secret).ok())
+    {
+        Some(claims) => format!("user:{}", claims.sub),
+        None => format!("ip:{}", client_ip(req.extensions())),
+    };
 
     state
         .rate_limit
-        .by_user
-        .check_key(&user_id)
+        .by_client
+        .check_key(&key)
         .map_err(|not_until| {
-            tracing::warn!(user_id = %user_id, "Rate limit exceeded (user)");
+            tracing::warn!(client = %key, "Rate limit exceeded");
             rate_limited(not_until)
         })?;
 
     Ok(next.run(req).await)
+}
+
+/// Extracteur de limite stricte par IP pour les routes d'authentification.
+///
+/// ```rust,ignore
+/// pub async fn login(_: AuthRateLimit, State(state): State<AppState>, ...) -> ...
+/// ```
+pub struct AuthRateLimit;
+
+impl FromRequestParts<AppState> for AuthRateLimit {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, ApiError> {
+        let ip = client_ip(&parts.extensions);
+        state.rate_limit.auth.check_key(&ip).map_err(|not_until| {
+            tracing::warn!(ip = %ip, "Auth rate limit exceeded");
+            rate_limited(not_until)
+        })?;
+        Ok(AuthRateLimit)
+    }
+}
+
+/// IP de la connexion TCP (attention : derrière un reverse proxy, c'est l'IP du proxy).
+fn client_ip(extensions: &axum::http::Extensions) -> IpAddr {
+    extensions
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|c| c.0.ip())
+        .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
 }
 
 /// Erreur `RATE_LIMITED` avec l'en-tête `Retry-After` (secondes, arrondi au supérieur).

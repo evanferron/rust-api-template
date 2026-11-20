@@ -36,8 +36,8 @@ pub async fn run(config: Config) -> std::io::Result<()> {
         pool,
         config: Arc::new(config.clone()),
         rate_limit: RateLimitStore::new(
-            10,  // 10 req/min sur les routes auth (login, register, refresh)
-            120, // 120 req/min sur les routes protégées
+            10,  // 10 req/min par IP sur login / register / refresh
+            120, // 120 req/min par utilisateur (ou par IP si anonyme) sur toute l'API
         ),
     };
 
@@ -47,8 +47,7 @@ pub async fn run(config: Config) -> std::io::Result<()> {
         let mut interval = tokio::time::interval(Duration::from_secs(3600)); // nettoyage toutes les heures
         loop {
             interval.tick().await;
-            rate_limit_clone.by_ip.retain_recent();
-            rate_limit_clone.by_user.retain_recent();
+            rate_limit_clone.retain_recent();
             tracing::debug!("Rate limit cache cleaned");
         }
     });

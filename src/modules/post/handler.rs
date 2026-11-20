@@ -1,11 +1,10 @@
 use crate::common::error::{ApiError, ErrorResponse};
-use crate::common::extract::{UuidParam, ValidatedJson, ValidatedPath, ValidatedQuery};
-use crate::common::jwt::Claims;
+use crate::common::extract::{AuthUser, UuidParam, ValidatedJson, ValidatedPath, ValidatedQuery};
 use crate::common::pagination::{PaginatedResponse, PaginationParams, PaginationQuery};
 use crate::common::state::AppState;
 use crate::modules::post::dto::{CreatePostRequest, PostResponse, UpdatePostRequest};
 use crate::modules::post::service;
-use axum::{Extension, Json, extract::State, http::StatusCode};
+use axum::{Json, extract::State, http::StatusCode};
 
 #[utoipa::path(
     get, path = "/api/posts", tag = "posts",
@@ -21,13 +20,13 @@ use axum::{Extension, Json, extract::State, http::StatusCode};
 )]
 pub async fn get_all(
     State(state): State<AppState>,
-    Extension(claims): Extension<Claims>,
+    user: AuthUser,
     ValidatedQuery(pagination): ValidatedQuery<PaginationQuery>,
 ) -> Result<Json<PaginatedResponse<PostResponse>>, ApiError> {
     let mut conn = state.pool.get().await?;
     let params = PaginationParams::from(pagination);
     Ok(Json(
-        service::get_all_by_user(&mut conn, claims.sub, params).await?,
+        service::get_all_by_user(&mut conn, user.id, params).await?,
     ))
 }
 
@@ -43,7 +42,7 @@ pub async fn get_all(
 )]
 pub async fn get_by_id(
     State(state): State<AppState>,
-    Extension(_claims): Extension<Claims>,
+    _user: AuthUser,
     ValidatedPath(params): ValidatedPath<UuidParam>,
 ) -> Result<Json<PostResponse>, ApiError> {
     let mut conn = state.pool.get().await?;
@@ -62,11 +61,11 @@ pub async fn get_by_id(
 )]
 pub async fn create(
     State(state): State<AppState>,
-    Extension(claims): Extension<Claims>,
+    user: AuthUser,
     ValidatedJson(payload): ValidatedJson<CreatePostRequest>,
 ) -> Result<(StatusCode, Json<PostResponse>), ApiError> {
     let mut conn = state.pool.get().await?;
-    let post = service::create(&mut conn, claims.sub, payload).await?;
+    let post = service::create(&mut conn, user.id, payload).await?;
     Ok((StatusCode::CREATED, Json(post)))
 }
 
@@ -85,13 +84,13 @@ pub async fn create(
 )]
 pub async fn update(
     State(state): State<AppState>,
-    Extension(claims): Extension<Claims>,
+    user: AuthUser,
     ValidatedPath(params): ValidatedPath<UuidParam>,
     ValidatedJson(payload): ValidatedJson<UpdatePostRequest>,
 ) -> Result<Json<PostResponse>, ApiError> {
     let mut conn = state.pool.get().await?;
     Ok(Json(
-        service::update(&mut conn, params.id, claims.sub, payload).await?,
+        service::update(&mut conn, params.id, user.id, payload).await?,
     ))
 }
 
@@ -108,10 +107,10 @@ pub async fn update(
 )]
 pub async fn delete(
     State(state): State<AppState>,
-    Extension(claims): Extension<Claims>,
+    user: AuthUser,
     ValidatedPath(params): ValidatedPath<UuidParam>,
 ) -> Result<StatusCode, ApiError> {
     let mut conn = state.pool.get().await?;
-    service::delete(&mut conn, params.id, claims.sub).await?;
+    service::delete(&mut conn, params.id, user.id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
