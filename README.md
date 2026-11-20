@@ -268,6 +268,14 @@ Le scan SonarCloud ne s'exécute que si le secret `SONAR_TOKEN` est configuré. 
 
 ---
 
+## Assistance IA
+
+`AGENTS.md` décrit l'architecture, les règles de dépendance, les recettes (module, table, code d'erreur, tests…)
+et les pièges du projet. Il est lu automatiquement par la plupart des agents (Codex, Cursor, Zed…) ;
+`CLAUDE.md` l'importe pour Claude Code. À mettre à jour quand une convention change.
+
+---
+
 ## Documentation Rust
 
 ```bash
