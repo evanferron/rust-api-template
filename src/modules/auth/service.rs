@@ -61,7 +61,8 @@ pub async fn login(
 // Refresh
 // ---------------------------------------------------------------------------
 
-/// Vérifie le refresh token et retourne un nouvel access token + nouveau refresh token (rotation).
+/// Vérifie le refresh token et retourne un nouvel access token + un nouveau refresh token.
+/// L'ancien refresh token n'est pas révoqué : il reste valide jusqu'à son expiration.
 pub fn refresh(config: &Config, refresh_token: &str) -> Result<(TokenResponse, String), ApiError> {
     let claims = verify_refresh_token(refresh_token, &config.jwt.refresh_secret)?;
     issue_tokens(config, claims.sub)

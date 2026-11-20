@@ -24,13 +24,13 @@
 //! ```rust,ignore
 //! // Code seul — le message par défaut est utilisé
 //! return Err(ErrorCode::PostNotFound.into());
-//! let post = repo.find(id).await?.ok_or(ErrorCode::PostNotFound)?;
+//! let post = PostRepository::find_by_id(conn, id).await?.ok_or(ErrorCode::PostNotFound)?;
 //!
 //! // Message spécifique pour le client
 //! return Err(ApiError::new(ErrorCode::Forbidden).with_detail("You can only edit your own posts"));
 //!
 //! // Erreur technique : la cause est loggée, le client ne reçoit qu'un message générique
-//! let hash = bcrypt::hash(pwd, cost).map_err(ApiError::internal)?;
+//! let file = std::fs::read(path).map_err(ApiError::internal)?;
 //! ```
 //!
 //! Les erreurs Diesel, du pool et de `validator` se convertissent automatiquement avec `?`.
