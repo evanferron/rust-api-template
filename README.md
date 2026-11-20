@@ -155,10 +155,30 @@ flowchart TD
     state --> config
 
     %% ───────────── Style ─────────────
-    classDef entry fill:#fef3c7,stroke:#d97706,color:#000
-    classDef root fill:#e0e7ff,stroke:#4f46e5,color:#000
+    %% Couleurs explicites partout : fonds clairs + texte foncé, traits gris moyen,
+    %% lisible avec le thème clair comme avec le thème sombre de GitHub.
+    classDef entry   fill:#fde68a,stroke:#b45309,stroke-width:2px,color:#1c1917
+    classDef root    fill:#c7d2fe,stroke:#4338ca,stroke-width:2px,color:#1e1b4b
+    classDef app     fill:#bfdbfe,stroke:#1d4ed8,color:#0f172a
+    classDef modules fill:#bbf7d0,stroke:#15803d,color:#052e16
+    classDef note    fill:#f0fdf4,stroke:#15803d,stroke-dasharray:4 3,color:#052e16
+    classDef common  fill:#fbcfe8,stroke:#be185d,color:#500724
+    classDef db      fill:#fed7aa,stroke:#c2410c,color:#431407
+
     class main,tests entry
     class config root
+    class server,appmod,openapi,telemetry app
+    class health,auth,user,post modules
+    class fmt note
+    class error,extract,jwt,pagination,state,mw common
+    class dbmod,repo,schema,entities db
+
+    style APP     fill:#eff6ff,stroke:#1d4ed8,stroke-width:2px,color:#1e3a8a
+    style MODULES fill:#f0fdf4,stroke:#15803d,stroke-width:2px,color:#14532d
+    style COMMON  fill:#fdf2f8,stroke:#be185d,stroke-width:2px,color:#831843
+    style DB      fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
+
+    linkStyle default stroke:#64748b,stroke-width:1.5px
 ```
 
 - **Flèches pleines** : elles vont toujours vers le bas, jamais vers `app` ni `modules`.
