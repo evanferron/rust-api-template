@@ -1,7 +1,8 @@
 # AGENTS.md
 
-Instructions pour les agents IA qui travaillent sur ce dépôt. Le `README.md` s'adresse aux humains ;
-ce fichier contient ce qu'il faut savoir pour modifier le code correctement du premier coup.
+Instructions pour les agents IA qui travaillent sur ce dépôt. Le `README.md` s'adresse aux développeurs
+(démarrage, endpoints, exploitation, CI) ; ce fichier contient les règles et recettes pour modifier le code
+correctement du premier coup. En cas de doute, le code fait foi.
 
 API REST Rust : **Axum 0.8 · Diesel 2.4 + diesel-async (PostgreSQL 18) · utoipa (OpenAPI) · JWT**.
 Edition 2024, MSRV `rust-version = "1.89"` (`Cargo.toml`).
@@ -31,7 +32,8 @@ diesel migration run                       # applique et régénère src/db/sche
 src/
 ├── main.rs  lib.rs  config.rs   config.rs : toute la configuration (variables d'env)
 ├── app/      assemblage et démarrage : router (mod.rs), server.rs, openapi.rs, telemetry.rs
-├── common/   partagé : error.rs, extract.rs, jwt.rs, pagination.rs, state.rs, middlewares/
+├── common/   partagé : error.rs, extract.rs, jwt.rs, password.rs, pagination.rs, state.rs,
+│             middlewares/{rate_limit,request_id}.rs
 ├── db/       pool + migrations (mod.rs), repository.rs (générique), schema.rs, <table>/{model,repository}.rs
 └── modules/  fonctionnalités HTTP : <module>/{mod.rs, handler.rs, service.rs, dto.rs}
 ```
@@ -42,7 +44,8 @@ src/
 - **Rien n'importe `app`** (sauf `main.rs` et les tests).
 - **`common` n'importe jamais un module.** Si du code de module devient partagé, il descend dans `common`.
 - **`db` ignore le HTTP** (pas d'axum, pas de DTO). Une table peut exister sans module, et inversement.
-- Un module n'importe pas un autre module. Exception existante : `user` utilise `auth::helpers` (bcrypt).
+- **Un module n'importe jamais un autre module** (aucune exception). Ce dont deux modules ont besoin
+  descend dans `common` (ex. `common/password.rs`, utilisé par `auth` et `user`) ou dans `db`.
 
 ### Rôle de chaque couche dans un module
 
@@ -51,7 +54,9 @@ src/
 | `mod.rs` | `pub fn routes() -> OpenApiRouter<AppState>` | logique |
 | `handler.rs` | extraction (State, AuthUser, Validated*), appel du service, code HTTP | SQL, règles métier |
 | `service.rs` | règles métier, vérification de propriété, conversion modèle → DTO | types axum |
-| `dto.rs` | structs requête (`Deserialize + Validate + ToSchema`) et réponse (`Serialize + ToSchema`) | modèles Diesel |
+| `dto.rs` | structs requête (`Deserialize + Validate + ToSchema`) et réponse (`Serialize + ToSchema`, `From<Model>`) | modèles Diesel |
+
+Les modèles Diesel (`db/<table>/model.rs`) ne dérivent pas `Serialize` : une réponse passe toujours par un DTO.
 
 Module de référence à copier : **`modules/post`** (+ `db/post`). Il couvre CRUD, pagination,
 authentification et vérification du propriétaire.
@@ -97,8 +102,9 @@ pub fn routes() -> OpenApiRouter<AppState> {
 }
 ```
 
-Ordre des paramètres d'un handler : `State`, `AuthUser`, `ValidatedPath`, `ValidatedQuery`, puis le corps
-(`ValidatedJson`) **en dernier** (contrainte d'axum).
+Ordre des paramètres d'un handler : `_: AuthRateLimit` (routes d'authentification sensibles uniquement),
+`State`, `AuthUser`, `ValidatedPath`, `ValidatedQuery`, `CookieJar`, puis le corps (`ValidatedJson`)
+**en dernier** (contrainte d'axum : le corps consomme la requête).
 
 ### Ajouter une table
 
@@ -155,7 +161,7 @@ CommentNotFound => (NOT_FOUND, "Comment not found"),
 ```rust
 let post = Repo::find_by_id(conn, id).await?.ok_or(ErrorCode::PostNotFound)?;              // code seul
 return Err(ApiError::new(ErrorCode::Forbidden).with_detail("You can only edit your own posts"));
-let hash = bcrypt::hash(pwd, cost).map_err(ApiError::internal)?; // cause loggée, jamais envoyée au client
+let file = std::fs::read(path).map_err(ApiError::internal)?; // 500 : cause loggée, jamais envoyée au client
 ```
 
 - Les erreurs Diesel, du pool et de `validator` se convertissent avec `?`.
@@ -166,18 +172,32 @@ let hash = bcrypt::hash(pwd, cost).map_err(ApiError::internal)?; // cause loggé
 ### Authentification, propriété, validation, pagination
 
 - **Route protégée** : ajouter `user: AuthUser` au handler (`user.id` = UUID de l'utilisateur).
-- **Propriété** : vérifier dans le service et renvoyer `ErrorCode::Forbidden` (voir `ensure_owner` dans `post/service.rs`).
+- **Propriété** : vérifier dans le service (jamais dans le handler) et renvoyer `ErrorCode::Forbidden` :
+  `ensure_owner` dans `post/service.rs`, `ensure_self` dans `user/service.rs`.
+- **Mots de passe** : `common::password::{hash_password, verify_password}` (bcrypt hors du runtime async,
+  coût réduit en debug). Ne pas appeler `bcrypt` directement.
+- **Rate limit strict** : ajouter `_: AuthRateLimit` en premier paramètre d'un handler sensible (limite par IP,
+  `RATE_LIMIT_AUTH_RPM`) ; la limite globale (`RATE_LIMIT_RPM`) s'applique déjà à toute l'API.
 - **Validation** : DTO avec `#[derive(Validate)]` + `#[serde(deny_unknown_fields)]`, extrait via
   `ValidatedJson` / `ValidatedQuery` / `ValidatedPath` (`UuidParam` pour `{id}`). Messages de validation en anglais.
 - **Pagination** : `ValidatedQuery<PaginationQuery>` → `PaginationParams::from(...)` → repository
-  `find_paginated_by` → `PaginatedResponse<T>` (`.map(Dto::from)` pour convertir).
+  `find_paginated` / `find_paginated_by` → `PaginatedResponse<T>` (`.map(Dto::from)` pour convertir).
+  Dans `#[utoipa::path]` : `params(PaginationQuery)` et `body = PaginatedResponse<XxxResponse>`
+  (voir `post/handler.rs::get_all`).
+- **Réponses d'auth** : `register` → `RegisterResponse` ; `login` / `refresh` → `TokenResponse`
+  (access token dans le corps, refresh token en cookie HttpOnly).
 - **Ne jamais exposer** un modèle Diesel directement : passer par un DTO de réponse (`impl From<Model> for Dto`).
 
 ### Configuration
 
-Ajouter une variable : champ dans la struct concernée de `src/config.rs`, lecture via `env.or("NOM", défaut)`
-(ou `env.required("NOM")`), documentation dans `.env.example`, test dans `config.rs`.
+Ajouter une variable : champ dans la struct concernée de `src/config.rs` (`ServerConfig`, `HttpConfig`,
+`RateLimitConfig`, `DatabaseConfig`, `JwtConfig`), lecture via `env.or("NOM", défaut)`, `env.required("NOM")`
+ou `env.seconds("NOM_SECS", défaut)` pour une durée, documentation dans `.env.example`, test dans `config.rs`.
 Ne jamais lire `std::env::var` ailleurs que dans `config.rs`.
+
+- Toute durée est en secondes et son nom finit par `_SECS`.
+- Renommer une variable : ajouter `(ancien, nouveau)` à `RENAMED_VARS` ; l'ancien nom fait alors échouer le
+  démarrage avec un message indiquant le nouveau, au lieu d'être ignoré silencieusement.
 
 ## Tests
 
@@ -186,6 +206,9 @@ Ne jamais lire `std::env::var` ailleurs que dans `config.rs`.
 | Unitaires | `#[cfg(test)] mod tests` dans le fichier | non |
 | Repository | `tests/repository.rs` | transaction annulée (`test_conn()`), parallélisable |
 | Santé | `tests/health.rs` | router complet via `common::test_state()` |
+
+Helpers partagés : `tests/common/mod.rs` (`get_test_app`, `test_state`, `test_pool`, `test_config`, `test_db_url`,
+`reset_db`). Un fichier de `tests/` qui n'en utilise qu'une partie déclare `#[allow(dead_code)] mod common;`.
 | E2E | `tests/features/*.feature` + `tests/steps/*_steps.rs` (Cucumber) | réinitialisée à chaque scénario |
 
 Ajouter des scénarios E2E pour un module :
@@ -204,10 +227,14 @@ Un step sans implémentation fait échouer le run (`fail_on_skipped`).
 
 - **Chemins utoipa** : sans `/api` (`path = "/posts"`), le préfixe est ajouté par `nest("/api", …)`.
 - **Crates 0.x** (diesel-async, utoipa-axum…) : une montée « mineure » (0.10 → 0.11) peut être cassante.
+  Dependabot les range dans la PR groupée « minor/patch » : c'est la CI qui détecte la casse.
 - **MSRV 1.89** : pas d'API de la std plus récente (clippy `incompatible_msrv` le signale).
 - **`schema.rs`** est généré : toute modification passe par une migration.
 - **libpq n'est pas nécessaire** pour l'API ni les tests (diesel-async) ; seul `diesel_cli` l'embarque (`postgres-bundled`).
 - **Logs** : `tracing` uniquement (`tracing::info!`…), jamais `println!`. Les 5xx sont déjà loggées par `ApiError`.
+- **Méthodes de repository introuvables** : importer `crate::db::repository::prelude::*`.
+- **Documentation** : une convention qui change se reporte ici et, si elle concerne les développeurs, dans le
+  `README.md` ; les deux ne doivent jamais se contredire.
 
 ## Conventions
 
