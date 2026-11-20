@@ -83,12 +83,15 @@ Prendre le module `post` comme référence (`src/db/post/` + `src/modules/post/`
 
 ## Tests
 
-```ps1
-# Exécution de tout les test (En POWERSHELl)
-.\script\cov.ps1
+```bash
+docker-compose up -d postgres_test   # base de test sur le port 5433
+
+cargo test                           # unitaires + intégration + Cucumber
+cargo llvm-cov --html                # idem avec rapport de couverture (ou .\script\cov.ps1)
 ```
 
-> Les tests e2e utilisent une base dédiée (`DATABASE_TEST_URL`) et se réinitialisent avant chaque test.
+> Les tests utilisent une base dédiée (`DATABASE_TEST_URL`) et appliquent eux-mêmes les migrations.
+> `tests/repository.rs` tourne dans des transactions annulées ; Cucumber réinitialise la base avant chaque scénario.
 
 ---
 
@@ -105,15 +108,23 @@ JWT_REFRESH_SECRET=<générer avec openssl rand -base64 64>
 
 ---
 
-## CI/CD
+## CI
 
-| Pipeline | Déclencheur | Étapes |
-|----------|-------------|--------|
-| `build.yml` | Push / PR sur `main`, `develop` | Lint → Tests → Coverage → SonarCloud → cargo audit |
-| `cd.yml` | Push sur `main` | Docker Hub → Render deploy |
+`.github/workflows/ci.yml` — sur chaque push et pull request, trois jobs en parallèle :
 
-**Secrets GitHub requis :**
-`DOCKERHUB_USERNAME` · `DOCKERHUB_TOKEN` · `RENDER_DEPLOY_HOOK_URL` · `SONAR_TOKEN`
+| Job | Contrôle |
+|-----|----------|
+| Format & Clippy | `cargo fmt --check` · `cargo clippy --all-targets -- -D warnings` |
+| Tests & Coverage | tous les tests sur PostgreSQL 16 + couverture (`cargo llvm-cov`) → SonarCloud |
+| Security audit | `cargo audit` (config : `.cargo/audit.toml`) |
+
+Pour reproduire la CI en local :
+
+```bash
+cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test && cargo audit
+```
+
+Le scan SonarCloud ne s'exécute que si le secret `SONAR_TOKEN` est configuré.
 
 ---
 
