@@ -7,9 +7,10 @@ on:
   push:
   pull_request:
 
-# Annule le run précédent sur la même branche / PR
+# Un seul run par branche : le push et la pull request d'une même branche partagent
+# le groupe, le plus récent annule l'autre (évite de tout exécuter deux fois).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 env:

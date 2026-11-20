@@ -21,6 +21,11 @@ on:
       - Cargo.lock
   workflow_dispatch:
 
+# Un seul run par branche (push et pull request d'une même branche partagent le groupe)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
