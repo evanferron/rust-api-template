@@ -87,7 +87,7 @@ pub async fn update(
 ) -> Result<Json<PostResponse>, ApiError> {
     let mut conn = state.pool.get().await?;
     Ok(Json(
-        service::update(&mut conn, params.id, user.id, payload).await?,
+        service::update(&mut conn, user.id, params.id, payload).await?,
     ))
 }
 
@@ -108,6 +108,6 @@ pub async fn delete(
     ValidatedPath(params): ValidatedPath<UuidParam>,
 ) -> Result<StatusCode, ApiError> {
     let mut conn = state.pool.get().await?;
-    service::delete(&mut conn, params.id, user.id).await?;
+    service::delete(&mut conn, user.id, params.id).await?;
     Ok(StatusCode::NO_CONTENT)
 }

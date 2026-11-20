@@ -172,6 +172,8 @@ let file = std::fs::read(path).map_err(ApiError::internal)?; // 500 : cause logg
 ### Authentification, propriété, validation, pagination
 
 - **Route protégée** : ajouter `user: AuthUser` au handler (`user.id` = UUID de l'utilisateur).
+- **Signature des services** : `(conn, <utilisateur authentifié>, <id de la ressource>, payload)`,
+  ex. `service::update(&mut conn, user.id, params.id, payload)`.
 - **Propriété** : vérifier dans le service (jamais dans le handler) et renvoyer `ErrorCode::Forbidden` :
   `ensure_owner` dans `post/service.rs`, `ensure_self` dans `user/service.rs`.
 - **Mots de passe** : `common::password::{hash_password, verify_password}` (bcrypt hors du runtime async,

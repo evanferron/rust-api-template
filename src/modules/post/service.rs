@@ -42,10 +42,11 @@ pub async fn create(
     ))
 }
 
+/// Modifie le post `id`. Seul son auteur (`user_id`) peut le faire.
 pub async fn update(
     conn: &mut AsyncPgConnection,
-    id: Uuid,
     user_id: Uuid,
+    id: Uuid,
     payload: UpdatePostRequest,
 ) -> Result<PostResponse, ApiError> {
     let post = find_existing(conn, id).await?;
@@ -61,7 +62,8 @@ pub async fn update(
     ))
 }
 
-pub async fn delete(conn: &mut AsyncPgConnection, id: Uuid, user_id: Uuid) -> Result<(), ApiError> {
+/// Supprime le post `id`. Seul son auteur (`user_id`) peut le faire.
+pub async fn delete(conn: &mut AsyncPgConnection, user_id: Uuid, id: Uuid) -> Result<(), ApiError> {
     let post = find_existing(conn, id).await?;
     ensure_owner(&post, user_id, "You can only delete your own posts")?;
 
