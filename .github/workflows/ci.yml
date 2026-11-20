@@ -1,6 +1,6 @@
 name: CI
 
-# Contrôle qualité bloquant : format, lint, tests, MSRV.
+# Contrôle qualité bloquant : format, lint, tests, MSRV, build Docker.
 # L'audit des dépendances est dans security-audit.yml (non bloquant pour pouvoir livrer un hotfix).
 
 on:
@@ -111,3 +111,22 @@ jobs:
 
       - name: cargo check (MSRV ${{ steps.msrv.outputs.version }})
         run: cargo check --all-targets --locked
+
+  # ---------------------------------------------------------------------------
+  # Build de l'image Docker (sans push)
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
