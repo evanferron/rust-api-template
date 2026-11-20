@@ -13,7 +13,6 @@ target/
 # CI/CD et déploiement
 .github/
 docker-compose.yml
-render.yaml
 Dockerfile
 
 # Outils externes
