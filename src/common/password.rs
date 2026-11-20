@@ -25,3 +25,30 @@ pub async fn verify_password(password: &str, hash: &str) -> Result<bool, ApiErro
         .map_err(ApiError::internal)?
         .map_err(ApiError::internal)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn hash_is_salted_and_verifiable() {
+        let hash = hash_password("S3cur3P@ssword").await.unwrap();
+        assert_ne!(hash, "S3cur3P@ssword");
+        assert_ne!(hash, hash_password("S3cur3P@ssword").await.unwrap());
+        assert!(verify_password("S3cur3P@ssword", &hash).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn wrong_password_is_rejected() {
+        let hash = hash_password("S3cur3P@ssword").await.unwrap();
+        assert!(!verify_password("wrong", &hash).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn malformed_hash_is_an_internal_error() {
+        let err = verify_password("S3cur3P@ssword", "not-a-bcrypt-hash")
+            .await
+            .unwrap_err();
+        assert_eq!(err.code(), crate::common::error::ErrorCode::Internal);
+    }
+}
