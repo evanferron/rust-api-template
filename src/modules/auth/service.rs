@@ -2,7 +2,7 @@ use diesel_async::AsyncPgConnection;
 use uuid::Uuid;
 
 use crate::common::error::{ApiError, ErrorCode};
-use crate::common::jwt::{create_refresh_token, create_token, verify_refresh_token};
+use crate::common::jwt::{create_token, verify_token};
 use crate::common::password::{hash_password, verify_password};
 use crate::config::Config;
 use crate::db::user::model::NewUser;
@@ -64,14 +64,14 @@ pub async fn login(
 /// Vérifie le refresh token et retourne un nouvel access token + un nouveau refresh token.
 /// L'ancien refresh token n'est pas révoqué : il reste valide jusqu'à son expiration.
 pub fn refresh(config: &Config, refresh_token: &str) -> Result<(TokenResponse, String), ApiError> {
-    let claims = verify_refresh_token(refresh_token, &config.jwt.refresh_secret)?;
+    let claims = verify_token(refresh_token, &config.jwt.refresh_secret)?;
     issue_tokens(config, claims.sub)
 }
 
 /// Crée un access token (réponse) et un refresh token (cookie) pour l'utilisateur.
 fn issue_tokens(config: &Config, user_id: Uuid) -> Result<(TokenResponse, String), ApiError> {
     let access_token = create_token(user_id, &config.jwt.secret, config.jwt.expiration)?;
-    let refresh_token = create_refresh_token(
+    let refresh_token = create_token(
         user_id,
         &config.jwt.refresh_secret,
         config.jwt.refresh_expiration,

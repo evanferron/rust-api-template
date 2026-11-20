@@ -1,7 +1,7 @@
-//! JWT : claims, création et vérification des tokens (access et refresh).
+//! JWT : claims, création et vérification des tokens.
 //!
-//! Les deux types de tokens partagent `Claims` mais sont signés avec des secrets distincts
-//! (`config.jwt.secret` / `config.jwt.refresh_secret`).
+//! Access et refresh tokens ont la même structure ; ils se distinguent par leur secret
+//! (`config.jwt.secret` / `config.jwt.refresh_secret`) : un token de l'un est rejeté par l'autre.
 
 use axum::http::{HeaderMap, header::AUTHORIZATION};
 use chrono::{Duration, Utc};
@@ -16,7 +16,6 @@ use crate::common::error::{ApiError, ErrorCode};
 // ---------------------------------------------------------------------------
 
 /// Claims embarqués dans les JWT (access token et refresh token).
-/// Les deux tokens partagent la même structure mais sont signés avec des secrets distincts.
 /// Dans les handlers, utiliser l'extracteur `AuthUser` (`common::extract`) plutôt que les claims.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
@@ -65,39 +64,28 @@ fn decoding_key(secret: &str) -> Result<DecodingKey, ApiError> {
 }
 
 // ---------------------------------------------------------------------------
-// Access token
+// Création / vérification
 // ---------------------------------------------------------------------------
 
-/// Crée un access token JWT signé pour l'utilisateur donné.
+/// Crée un token signé pour l'utilisateur, valable `expiration` secondes.
 ///
-/// # Arguments
-/// * `user_id`    — UUID de l'utilisateur
-/// * `secret`     — clé secrète depuis `config.jwt.secret`
-/// * `expiration` — durée de vie en secondes depuis `config.jwt.expiration`
+/// Access token : `config.jwt.secret` / `config.jwt.expiration`.
+/// Refresh token : `config.jwt.refresh_secret` / `config.jwt.refresh_expiration`.
 pub fn create_token(user_id: Uuid, secret: &str, expiration: u32) -> Result<String, ApiError> {
     let now = Utc::now();
     let claims = Claims {
         sub: user_id,
         iat: now.timestamp(),
-        exp: (now + Duration::seconds(expiration as i64)).timestamp(),
+        exp: (now + Duration::seconds(i64::from(expiration))).timestamp(),
     };
 
-    encode(
-        &Header::default(), // algorithme HS256 par défaut
-        &claims,
-        &encoding_key(secret)?,
-    )
-    .map_err(ApiError::internal)
+    // HS256 par défaut
+    encode(&Header::default(), &claims, &encoding_key(secret)?).map_err(ApiError::internal)
 }
 
-/// Vérifie et décode un access token JWT.
+/// Vérifie la signature et l'expiration d'un token signé avec `secret`, et renvoie ses claims.
 /// Erreurs : `TOKEN_EXPIRED`, `INVALID_TOKEN`.
 pub fn verify_token(token: &str, secret: &str) -> Result<Claims, ApiError> {
-    decode_claims(token, secret)
-}
-
-/// Décode et vérifie un token (signature + expiration).
-fn decode_claims(token: &str, secret: &str) -> Result<Claims, ApiError> {
     use jsonwebtoken::errors::ErrorKind;
 
     decode::<Claims>(token, &decoding_key(secret)?, &validation())
@@ -106,33 +94,6 @@ fn decode_claims(token: &str, secret: &str) -> Result<Claims, ApiError> {
             ErrorKind::ExpiredSignature => ApiError::new(ErrorCode::TokenExpired),
             _ => ApiError::new(ErrorCode::InvalidToken).with_source(e),
         })
-}
-
-// ---------------------------------------------------------------------------
-// Refresh token
-// ---------------------------------------------------------------------------
-
-/// Crée un refresh token JWT signé.
-/// Utilise un secret distinct de l'access token pour limiter la surface d'attaque.
-pub fn create_refresh_token(
-    user_id: Uuid,
-    secret: &str,
-    expiration: u32,
-) -> Result<String, ApiError> {
-    let now = Utc::now();
-    let claims = Claims {
-        sub: user_id,
-        iat: now.timestamp(),
-        exp: (now + Duration::seconds(expiration as i64)).timestamp(),
-    };
-
-    encode(&Header::default(), &claims, &encoding_key(secret)?).map_err(ApiError::internal)
-}
-
-/// Vérifie et décode un refresh token JWT.
-/// Erreurs : `TOKEN_EXPIRED`, `INVALID_TOKEN`.
-pub fn verify_refresh_token(token: &str, secret: &str) -> Result<Claims, ApiError> {
-    decode_claims(token, secret)
 }
 
 #[cfg(test)]
