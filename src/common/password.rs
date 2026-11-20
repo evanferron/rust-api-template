@@ -1,7 +1,11 @@
-//! Hachage et vérification des mots de passe.
+//! Hachage et vérification des mots de passe (bcrypt).
+//!
+//! bcrypt est coûteux en CPU : il s'exécute dans un thread bloquant pour ne pas bloquer le runtime.
+//! Coût réduit (4) en build debug pour accélérer les tests, 12 en release.
 
 use crate::common::error::ApiError;
 
+/// Hache un mot de passe.
 pub async fn hash_password(password: &str) -> Result<String, ApiError> {
     let password = password.to_string();
     let cost = if cfg!(debug_assertions) { 4 } else { 12 };

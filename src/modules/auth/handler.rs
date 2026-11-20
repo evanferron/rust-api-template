@@ -6,9 +6,10 @@ use crate::common::error::{ApiError, ErrorCode, ErrorResponse};
 use crate::common::extract::ValidatedJson;
 use crate::common::middlewares::rate_limit::AuthRateLimit;
 use crate::common::state::AppState;
-use crate::modules::auth::dto::{LoginRequest, LoginResponse, RefreshResponse, RegisterRequest};
+use crate::modules::auth::dto::{
+    LoginRequest, LoginResponse, RefreshResponse, RegisterRequest, RegisterResponse,
+};
 use crate::modules::auth::service;
-use crate::modules::user::dto::UserResponse;
 
 // ---------------------------------------------------------------------------
 // Register
@@ -20,7 +21,7 @@ use crate::modules::user::dto::UserResponse;
     tag = "auth",
     request_body = RegisterRequest,
     responses(
-        (status = 201, description = "Utilisateur créé",    body = UserResponse),
+        (status = 201, description = "Utilisateur créé",    body = RegisterResponse),
         (status = 422, description = "Données invalides (VALIDATION_FAILED)", body = ErrorResponse),
         (status = 409, description = "Email déjà utilisé",  body = ErrorResponse),
     )
@@ -29,7 +30,7 @@ pub async fn register(
     _: AuthRateLimit,
     State(state): State<AppState>,
     ValidatedJson(payload): ValidatedJson<RegisterRequest>,
-) -> Result<(StatusCode, Json<UserResponse>), ApiError> {
+) -> Result<(StatusCode, Json<RegisterResponse>), ApiError> {
     let mut conn = state.pool.get().await?;
     let user = service::register(&mut conn, payload).await?;
     Ok((StatusCode::CREATED, Json(user)))

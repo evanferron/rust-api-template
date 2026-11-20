@@ -5,7 +5,6 @@ use crate::common::state::AppState;
 
 pub mod dto;
 pub mod handler;
-pub mod helpers;
 pub mod service;
 
 /// Routes publiques d'authentification.

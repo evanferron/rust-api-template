@@ -3,12 +3,13 @@ use uuid::Uuid;
 
 use crate::common::error::{ApiError, ErrorCode};
 use crate::common::jwt::{create_refresh_token, create_token, verify_refresh_token};
+use crate::common::password::{hash_password, verify_password};
 use crate::config::Config;
 use crate::db::user::model::NewUser;
 use crate::db::user::repository::UserRepository;
-use crate::modules::auth::dto::{LoginRequest, LoginResponse, RefreshResponse, RegisterRequest};
-use crate::modules::auth::helpers::{hash_password, verify_password};
-use crate::modules::user::dto::UserResponse;
+use crate::modules::auth::dto::{
+    LoginRequest, LoginResponse, RefreshResponse, RegisterRequest, RegisterResponse,
+};
 // ---------------------------------------------------------------------------
 // Register
 // ---------------------------------------------------------------------------
@@ -16,7 +17,7 @@ use crate::modules::user::dto::UserResponse;
 pub async fn register(
     conn: &mut AsyncPgConnection,
     payload: RegisterRequest,
-) -> Result<UserResponse, ApiError> {
+) -> Result<RegisterResponse, ApiError> {
     if UserRepository::find_by_email(conn, &payload.email)
         .await?
         .is_some()
@@ -33,7 +34,7 @@ pub async fn register(
         last_name: payload.last_name,
     };
     let user = UserRepository::create(conn, new_user).await?;
-    Ok(UserResponse::from(user))
+    Ok(RegisterResponse::from(user))
 }
 
 // ---------------------------------------------------------------------------

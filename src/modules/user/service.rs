@@ -2,10 +2,10 @@ use diesel_async::AsyncPgConnection;
 use uuid::Uuid;
 
 use crate::common::error::{ApiError, ErrorCode};
+use crate::common::password::{hash_password, verify_password};
 use crate::db::repository::prelude::*;
 use crate::db::user::model::UserChangeset;
 use crate::db::user::repository::UserRepository;
-use crate::modules::auth::helpers::{hash_password, verify_password};
 use crate::modules::user::dto::{UpdateUserRequest, UserResponse};
 
 pub async fn get_all(conn: &mut AsyncPgConnection) -> Result<Vec<UserResponse>, ApiError> {

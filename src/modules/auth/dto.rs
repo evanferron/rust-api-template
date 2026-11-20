@@ -1,6 +1,10 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use uuid::Uuid;
 use validator::Validate;
+
+use crate::db::user::model::User;
 
 // ---------------------------------------------------------------------------
 // Register
@@ -40,6 +44,28 @@ pub struct RegisterRequest {
         message = "Last name must be between 1 and 100 characters"
     ))]
     pub last_name: String,
+}
+
+/// Utilisateur créé — ne contient jamais le hash du mot de passe.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct RegisterResponse {
+    pub id: Uuid,
+    pub email: String,
+    pub first_name: String,
+    pub last_name: String,
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<User> for RegisterResponse {
+    fn from(user: User) -> Self {
+        Self {
+            id: user.id,
+            email: user.email,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            created_at: user.created_at,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
