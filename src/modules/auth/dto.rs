@@ -10,7 +10,7 @@ use validator::Validate;
 #[serde(deny_unknown_fields)]
 pub struct RegisterRequest {
     /// Adresse email unique de l'utilisateur
-    #[schema(example = "evan@example.com")]
+    #[schema(example = "jane.doe@example.com")]
     #[validate(email(message = "Invalid email address"))]
     pub email: String,
 
@@ -24,7 +24,7 @@ pub struct RegisterRequest {
     pub password: String,
 
     /// Prénom affiché
-    #[schema(example = "Evan")]
+    #[schema(example = "Jane")]
     #[validate(length(
         min = 1,
         max = 100,
@@ -33,7 +33,7 @@ pub struct RegisterRequest {
     pub first_name: String,
 
     /// Nom de famille
-    #[schema(example = "Ferron")]
+    #[schema(example = "Doe")]
     #[validate(length(
         min = 1,
         max = 100,
@@ -49,7 +49,7 @@ pub struct RegisterRequest {
 #[derive(Deserialize, ToSchema, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct LoginRequest {
-    #[schema(example = "evan@example.com")]
+    #[schema(example = "jane.doe@example.com")]
     #[validate(email(message = "Invalid email address"))]
     pub email: String,
 
@@ -85,10 +85,10 @@ mod tests {
     #[test]
     fn test_register_valid() {
         let req = RegisterRequest {
-            email: "evan@example.com".to_string(),
+            email: "jane.doe@example.com".to_string(),
             password: "securepass".to_string(),
-            first_name: "Evan".to_string(),
-            last_name: "Ferron".to_string(),
+            first_name: "Jane".to_string(),
+            last_name: "Doe".to_string(),
         };
         assert!(req.validate().is_ok());
     }
@@ -98,8 +98,8 @@ mod tests {
         let req = RegisterRequest {
             email: "not-an-email".to_string(),
             password: "securepass".to_string(),
-            first_name: "Evan".to_string(),
-            last_name: "Ferron".to_string(),
+            first_name: "Jane".to_string(),
+            last_name: "Doe".to_string(),
         };
         assert!(req.validate().is_err());
     }
@@ -107,10 +107,10 @@ mod tests {
     #[test]
     fn test_register_password_too_short() {
         let req = RegisterRequest {
-            email: "evan@example.com".to_string(),
+            email: "jane.doe@example.com".to_string(),
             password: "short".to_string(),
-            first_name: "Evan".to_string(),
-            last_name: "Ferron".to_string(),
+            first_name: "Jane".to_string(),
+            last_name: "Doe".to_string(),
         };
         assert!(req.validate().is_err());
     }

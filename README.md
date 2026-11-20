@@ -22,9 +22,7 @@ Template API REST production-ready — Axum 0.8 · Diesel 2 async · PostgreSQL 
 ## Démarrage rapide
 
 ```bash
-# 1. Cloner le projet
-git clone https://github.com/<ton-org>/rust-api-template
-cd rust-api-template
+# 1. Créer un dépôt depuis ce template (bouton « Use this template » sur GitHub), puis le cloner
 
 # 2. Lancer PostgreSQL (dev sur 5432, tests sur 5433)
 docker compose up -d

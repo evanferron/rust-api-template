@@ -43,11 +43,11 @@ impl From<User> for UserResponse {
 #[serde(deny_unknown_fields)]
 #[validate(schema(function = "validate_password_change"))]
 pub struct UpdateUserRequest {
-    #[schema(example = "evan@example.com")]
+    #[schema(example = "jane.doe@example.com")]
     #[validate(email(message = "Invalid email address"))]
     pub email: Option<String>,
 
-    #[schema(example = "Evan")]
+    #[schema(example = "Jane")]
     #[validate(length(
         min = 1,
         max = 100,
@@ -55,7 +55,7 @@ pub struct UpdateUserRequest {
     ))]
     pub first_name: Option<String>,
 
-    #[schema(example = "Ferron")]
+    #[schema(example = "Doe")]
     #[validate(length(
         min = 1,
         max = 100,

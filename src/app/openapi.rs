@@ -16,13 +16,9 @@ use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
         (name = "posts",  description = "Gestion des posts"),
     ),
     info(
-        title = "API Template",
+        title = env!("CARGO_PKG_NAME"),
         version = env!("CARGO_PKG_VERSION"),
-        description = "API Template Rust — Axum + Diesel + PostgreSQL",
-        contact(
-            name = "Evan",
-            email = "evan.ferron53@gmail.com"
-        ),
+        description = "API REST — Axum + Diesel + PostgreSQL",
     ),
     modifiers(&SecurityAddon),
 )]

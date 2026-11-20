@@ -13,21 +13,21 @@ Feature: Auth
         When je m'enregistre avec:
             | email      | register@test.com |
             | password   | securepass        |
-            | first_name | Evan              |
-            | last_name  | Ferron            |
+            | first_name | Jane              |
+            | last_name  | Doe               |
         Then le statut de la réponse est 201
         And la réponse contient:
             | email      | register@test.com |
-            | first_name | Evan              |
-            | last_name  | Ferron            |
+            | first_name | Jane              |
+            | last_name  | Doe               |
         And le hash du mot de passe n'apparaît pas dans la réponse
 
     Scenario: Register fails with invalid email
         When je m'enregistre avec:
             | email      | not-an-email |
             | password   | securepass   |
-            | first_name | Evan         |
-            | last_name  | Ferron       |
+            | first_name | Jane         |
+            | last_name  | Doe          |
         Then le statut de la réponse est 422
         And la réponse contient:
             | code | VALIDATION_FAILED |
@@ -37,8 +37,8 @@ Feature: Auth
         When je m'enregistre avec:
             | email      | valid@test.com |
             | password   | short          |
-            | first_name | Evan           |
-            | last_name  | Ferron         |
+            | first_name | Jane           |
+            | last_name  | Doe            |
         Then le statut de la réponse est 422
         And la réponse contient:
             | code | VALIDATION_FAILED |
@@ -48,13 +48,13 @@ Feature: Auth
         When je m'enregistre avec:
             | email      | duplicate@test.com |
             | password   | securepass         |
-            | first_name | Evan               |
-            | last_name  | Ferron             |
+            | first_name | Jane               |
+            | last_name  | Doe                |
         And je m'enregistre à nouveau avec:
             | email      | duplicate@test.com |
             | password   | securepass         |
-            | first_name | Evan               |
-            | last_name  | Ferron             |
+            | first_name | Jane               |
+            | last_name  | Doe                |
         Then le statut de la réponse est 409
         And la réponse contient:
             | code | EMAIL_ALREADY_USED |
