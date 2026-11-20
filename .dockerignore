@@ -16,11 +16,7 @@ docker-compose.yml
 render.yaml
 Dockerfile
 
-# Documentation et outils externes
-docs/
+# Outils externes
 script/
 sonar-project.properties
 README.md
-
-# Fichiers IA
-.copilot-instructions.md

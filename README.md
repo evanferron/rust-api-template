@@ -124,20 +124,11 @@ JWT_REFRESH_SECRET=<générer avec openssl rand -base64 64>
 
 ---
 
-## Assistance IA
+## Documentation Rust
 
-Ce projet inclut des fichiers de contexte pour maximiser l'aide des outils IA :
-
-| Fichier | Outil | Activation |
-|---------|-------|------------|
-| `.github/copilot-instructions.md` | GitHub Copilot | Automatique |
-| `docs/IA_CONTEXT.md` | Claude / ChatGPT | Coller en début de conversation |
-
-`docs/IA_CONTEXT.md` contient l'architecture complète, tous les patterns de code, les décisions techniques et les pièges connus — colle-le dans n'importe quel chat IA pour obtenir une assistance adaptée au projet.
-
-## Commande à exécuter pour accèder à la doc rust
-
+```bash
 cargo doc --no-deps --document-private-items --open
+```
 
-Pour comprendre comment fonctionne le repository générique :
-    dans la doc aller dans core/repostory
+Le fonctionnement du repository générique est documenté dans le module `core::repository`.
+
