@@ -21,7 +21,7 @@ axum-extra = { version = "0.12.6", features = ["cookie"] }
 tokio = { version = "1.54.1", features = ["full"] }
 dotenvy = "0.15.7"
 utoipa = { version = "6.0.0", features = ["axum_extras", "uuid", "chrono"] }
-utoipa-swagger-ui = { version = "10.0.2", features = ["axum"] }
+utoipa-swagger-ui = { version = "10.0.2", features = ["axum", "vendored"] } # Swagger UI embarqué : aucun téléchargement au build
 utoipa-axum = "0.3.0"
 
 # Middlewares (CORS, logs, limites, compression)
