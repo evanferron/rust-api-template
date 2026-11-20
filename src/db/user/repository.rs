@@ -14,6 +14,7 @@ pub struct UserRepository;
 
 crate::impl_find_by_id!(UserRepository, User, crate::db::schema::users, Uuid);
 crate::impl_delete!(UserRepository, crate::db::schema::users, Uuid);
+crate::impl_exists!(UserRepository, crate::db::schema::users, Uuid);
 crate::impl_paginate!(UserRepository, User, crate::db::schema::users, created_at);
 
 // ---------------------------------------------------------------------------

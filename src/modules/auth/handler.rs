@@ -76,7 +76,7 @@ pub async fn login(
     ),
     responses(
         (status = 200, description = "Token renouvelé",             body = TokenResponse),
-        (status = 401, description = "Refresh token absent ou invalide", body = ErrorResponse),
+        (status = 401, description = "Refresh token absent ou invalide, ou compte supprimé", body = ErrorResponse),
     )
 )]
 pub async fn refresh(
@@ -91,7 +91,9 @@ pub async fn refresh(
             ApiError::new(ErrorCode::Unauthorized).with_detail("Missing refresh token")
         })?;
 
-    let (response, new_refresh_token) = service::refresh(&state.config, &refresh_token)?;
+    let mut conn = state.pool.get().await?;
+    let (response, new_refresh_token) =
+        service::refresh(&mut conn, &state.config, &refresh_token).await?;
 
     let cookie = refresh_cookie(
         &state,

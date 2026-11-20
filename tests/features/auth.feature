@@ -106,6 +106,14 @@ Feature: Auth
         Then le statut de la réponse est 200
         And la réponse contient un nouvel access_token
 
+    Scenario: Renouveler le token après suppression du compte échoue
+        Given je suis connecté en tant que "deleted@test.com" avec le mot de passe "securepass"
+        When je supprime mon compte
+        And j'appelle l'endpoint refresh avec le refresh_token cookie
+        Then le statut de la réponse est 401
+        And la réponse contient:
+            | code | INVALID_TOKEN |
+
     Scenario: Renouveler le token sans cookie de refresh échoue
         When j'appelle l'endpoint refresh sans cookie
         Then le statut de la réponse est 401

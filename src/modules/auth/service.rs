@@ -5,6 +5,7 @@ use crate::common::error::{ApiError, ErrorCode};
 use crate::common::jwt::{create_token, verify_token};
 use crate::common::password::{hash_password, verify_password};
 use crate::config::Config;
+use crate::db::repository::prelude::*;
 use crate::db::user::model::NewUser;
 use crate::db::user::repository::UserRepository;
 use crate::modules::auth::dto::{LoginRequest, RegisterRequest, RegisterResponse, TokenResponse};
@@ -63,8 +64,16 @@ pub async fn login(
 
 /// Vérifie le refresh token et retourne un nouvel access token + un nouveau refresh token.
 /// L'ancien refresh token n'est pas révoqué : il reste valide jusqu'à son expiration.
-pub fn refresh(config: &Config, refresh_token: &str) -> Result<(TokenResponse, String), ApiError> {
+/// Un compte supprimé ne peut plus obtenir de token (`INVALID_TOKEN`).
+pub async fn refresh(
+    conn: &mut AsyncPgConnection,
+    config: &Config,
+    refresh_token: &str,
+) -> Result<(TokenResponse, String), ApiError> {
     let claims = verify_token(refresh_token, &config.jwt.refresh_secret)?;
+    if !UserRepository::exists(conn, claims.sub).await? {
+        return Err(ApiError::new(ErrorCode::InvalidToken).with_detail("User no longer exists"));
+    }
     issue_tokens(config, claims.sub)
 }
 
