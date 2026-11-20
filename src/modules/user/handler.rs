@@ -48,7 +48,7 @@ pub async fn get_by_id(
     request_body = UpdateUserRequest,
     responses(
         (status = 200, body = UserResponse),
-        (status = 400, body = ErrorResponse),
+        (status = 422, description = "Données invalides (VALIDATION_FAILED)", body = ErrorResponse),
         (status = 401, body = ErrorResponse),
         (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),

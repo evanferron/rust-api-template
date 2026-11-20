@@ -21,7 +21,7 @@ use crate::modules::user::dto::UserResponse;
     request_body = RegisterRequest,
     responses(
         (status = 201, description = "Utilisateur créé",    body = UserResponse),
-        (status = 400, description = "Données invalides",   body = ErrorResponse),
+        (status = 422, description = "Données invalides (VALIDATION_FAILED)", body = ErrorResponse),
         (status = 409, description = "Email déjà utilisé",  body = ErrorResponse),
     )
 )]
@@ -46,7 +46,7 @@ pub async fn register(
     request_body = LoginRequest,
     responses(
         (status = 200, description = "Authentification réussie", body = LoginResponse),
-        (status = 400, description = "Données invalides",        body = ErrorResponse),
+        (status = 422, description = "Données invalides (VALIDATION_FAILED)", body = ErrorResponse),
         (status = 401, description = "Identifiants incorrects",  body = ErrorResponse),
     )
 )]

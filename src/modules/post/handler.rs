@@ -55,7 +55,7 @@ pub async fn get_by_id(
     request_body = CreatePostRequest,
     responses(
         (status = 201, body = PostResponse),
-        (status = 400, body = ErrorResponse),
+        (status = 422, description = "Données invalides (VALIDATION_FAILED)", body = ErrorResponse),
         (status = 401, body = ErrorResponse),
     )
 )]
@@ -76,7 +76,7 @@ pub async fn create(
     request_body = UpdatePostRequest,
     responses(
         (status = 200, body = PostResponse),
-        (status = 400, body = ErrorResponse),
+        (status = 422, description = "Données invalides (VALIDATION_FAILED)", body = ErrorResponse),
         (status = 401, body = ErrorResponse),
         (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
