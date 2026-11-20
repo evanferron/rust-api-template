@@ -30,7 +30,7 @@ pub async fn create_pool(
     let manager = AsyncDieselConnectionManager::<AsyncPgConnection>::new(&config.url);
 
     Pool::builder()
-        .max_size(config.max_connections)
+        .max_size(config.max_connections.get())
         .connection_timeout(config.acquire_timeout)
         .idle_timeout(Some(config.idle_timeout))
         .max_lifetime(Some(config.max_lifetime))

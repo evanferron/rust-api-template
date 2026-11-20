@@ -52,7 +52,8 @@ pub struct RateLimitConfig {
 #[derive(Debug, Clone)]
 pub struct DatabaseConfig {
     pub url: String,
-    pub max_connections: u32,
+    /// Taille maximale du pool.
+    pub max_connections: NonZeroU32,
     /// Attente maximale d'une connexion du pool.
     pub acquire_timeout: Duration,
     /// Durée après laquelle une connexion inutilisée est fermée.
@@ -159,7 +160,7 @@ impl Config {
             },
             database: DatabaseConfig {
                 url: env.required("DATABASE_URL"),
-                max_connections: env.or("DATABASE_MAX_CONNECTIONS", 10),
+                max_connections: env.or("DATABASE_MAX_CONNECTIONS", NonZeroU32::new(10).unwrap()),
                 acquire_timeout: env.seconds("DATABASE_ACQUIRE_TIMEOUT_SECS", 30),
                 idle_timeout: env.seconds("DATABASE_IDLE_TIMEOUT_SECS", 600),
                 max_lifetime: env.seconds("DATABASE_MAX_LIFETIME_SECS", 1800),
@@ -294,7 +295,7 @@ mod tests {
         assert_eq!(config.http.cors_allowed_origins, ["http://localhost:5173"]);
         assert!(!config.http.trust_proxy);
         assert_eq!(config.rate_limit.requests_per_minute.get(), 120);
-        assert_eq!(config.database.max_connections, 10);
+        assert_eq!(config.database.max_connections.get(), 10);
     }
 
     #[test]
@@ -311,6 +312,7 @@ mod tests {
     #[test]
     fn invalid_value_is_never_silently_replaced() {
         assert!(with(&[("DATABASE_MAX_CONNECTIONS", "-1")]).is_err());
+        assert!(with(&[("DATABASE_MAX_CONNECTIONS", "0")]).is_err());
         assert!(with(&[("RATE_LIMIT_RPM", "0")]).is_err());
         assert!(with(&[("REQUEST_TIMEOUT_SECS", "0")]).is_err());
         assert!(with(&[("TRUST_PROXY", "yes")]).is_err());
