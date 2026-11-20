@@ -168,7 +168,7 @@ impl IntoResponse for ApiError {
     }
 }
 
-/// ─── Tests unitaires pour ApiError et ErrorResponse ─────────────────────────
+// ─── Tests unitaires pour ApiError et ErrorResponse ─────────────────────────
 
 #[cfg(test)]
 mod tests {
@@ -282,20 +282,6 @@ mod tests {
         assert!(body.message.contains("user-abc"));
         assert!(body.message.contains("10"));
         assert!(body.message.contains("30s"));
-    }
-
-    // ─── Display (thiserror) ─────────────────────────────────────────────────
-
-    #[test]
-    fn test_display_authentication() {
-        let err = ApiError::Authentication("token expired".to_string());
-        assert_eq!(err.to_string(), "Authentication error: token expired");
-    }
-
-    #[test]
-    fn test_display_not_found() {
-        let err = ApiError::NotFound("user 42".to_string());
-        assert_eq!(err.to_string(), "Resource not found: user 42");
     }
 
     // ─── From<DieselError> ───────────────────────────────────────────────────

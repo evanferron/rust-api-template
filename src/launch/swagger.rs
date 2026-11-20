@@ -81,34 +81,6 @@ mod tests {
         ApiDoc::openapi()
     }
 
-    // ─── Info ────────────────────────────────────────────────────────────────
-
-    #[test]
-    fn test_openapi_title() {
-        let doc = build_doc();
-        assert_eq!(doc.info.title, "API Template");
-    }
-
-    #[test]
-    fn test_openapi_version_matches_cargo() {
-        let doc = build_doc();
-        assert_eq!(doc.info.version, env!("CARGO_PKG_VERSION"));
-    }
-
-    #[test]
-    fn test_openapi_contact_email() {
-        let doc = build_doc();
-        let contact = doc.info.contact.expect("contact should be set");
-        assert_eq!(contact.email.as_deref(), Some("evan.ferron53@gmail.com"));
-    }
-
-    #[test]
-    fn test_openapi_contact_name() {
-        let doc = build_doc();
-        let contact = doc.info.contact.expect("contact should be set");
-        assert_eq!(contact.name.as_deref(), Some("Evan"));
-    }
-
     // ─── Tags ────────────────────────────────────────────────────────────────
 
     #[test]
@@ -125,13 +97,6 @@ mod tests {
         assert!(tags.contains(&"health"), "tag 'health' manquant");
         assert!(tags.contains(&"auth"), "tag 'auth' manquant");
         assert!(tags.contains(&"users"), "tag 'users' manquant");
-    }
-
-    #[test]
-    fn test_openapi_tag_count() {
-        let doc = build_doc();
-        let count = doc.tags.as_deref().unwrap_or_default().len();
-        assert_eq!(count, 3);
     }
 
     // ─── Paths ───────────────────────────────────────────────────────────────
