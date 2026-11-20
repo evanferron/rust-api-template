@@ -1,11 +1,21 @@
+//! Configuration de l'application, chargée depuis les variables d'environnement.
+//!
+//! Toutes les variables sont documentées dans `.env.example`.
+//! Seules `DATABASE_URL`, `JWT_SECRET` et `JWT_REFRESH_SECRET` sont obligatoires.
+
 use std::env;
 use std::fmt;
+use std::num::{NonZeroU32, NonZeroU64};
 use std::str::FromStr;
+use std::time::Duration;
 
-/// Configuration de l'application, chargée depuis l'environnement (voir `.env.example`).
+use axum::http::HeaderValue;
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub server: ServerConfig,
+    pub http: HttpConfig,
+    pub rate_limit: RateLimitConfig,
     pub database: DatabaseConfig,
     pub jwt: JwtConfig,
 }
@@ -14,7 +24,29 @@ pub struct Config {
 pub struct ServerConfig {
     pub host: String,
     pub port: u16,
-    pub environment: String,
+    pub environment: Environment,
+    /// Délai maximal pour terminer les requêtes en cours à l'arrêt (`SIGTERM`, Ctrl+C).
+    pub shutdown_timeout: Duration,
+}
+
+#[derive(Debug, Clone)]
+pub struct HttpConfig {
+    /// Origines autorisées par CORS.
+    pub cors_allowed_origins: Vec<HeaderValue>,
+    /// Durée maximale de traitement d'une requête.
+    pub request_timeout: Duration,
+    /// Taille maximale d'un corps de requête, en octets.
+    pub body_limit: usize,
+    /// Derrière un reverse proxy : l'IP du client est lue dans `X-Forwarded-For`.
+    pub trust_proxy: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct RateLimitConfig {
+    /// Requêtes/minute sur toute l'API, par utilisateur (ou par IP si anonyme).
+    pub requests_per_minute: NonZeroU32,
+    /// Requêtes/minute par IP sur login / register / refresh.
+    pub auth_requests_per_minute: NonZeroU32,
 }
 
 #[derive(Debug, Clone)]
@@ -32,6 +64,42 @@ pub struct JwtConfig {
     pub expiration: u32,
     pub refresh_secret: String,
     pub refresh_expiration: u32,
+}
+
+/// Environnement d'exécution (`ENVIRONMENT=development|production`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Environment {
+    /// Logs lisibles, cookies sans `Secure` (HTTP local).
+    Development,
+    /// Logs JSON, cookies `Secure`.
+    Production,
+}
+
+impl Environment {
+    pub fn is_production(self) -> bool {
+        self == Environment::Production
+    }
+}
+
+impl FromStr for Environment {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "development" | "dev" => Ok(Environment::Development),
+            "production" | "prod" => Ok(Environment::Production),
+            _ => Err(()),
+        }
+    }
+}
+
+impl fmt::Display for Environment {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Environment::Development => "development",
+            Environment::Production => "production",
+        })
+    }
 }
 
 /// Erreurs de configuration : liste **toutes** les variables manquantes ou invalides.
@@ -53,7 +121,6 @@ impl std::error::Error for ConfigError {}
 impl Config {
     /// Charge la configuration depuis les variables d'environnement.
     ///
-    /// Obligatoires : `DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`.
     /// Une valeur présente mais invalide (ex: `SERVER_PORT=abc`) est une erreur,
     /// jamais remplacée silencieusement par la valeur par défaut.
     pub fn from_env() -> Result<Self, ConfigError> {
@@ -71,7 +138,19 @@ impl Config {
             server: ServerConfig {
                 host: env.or("SERVER_HOST", "127.0.0.1".to_string()),
                 port: env.or("SERVER_PORT", 8080),
-                environment: env.or("ENVIRONMENT", "development".to_string()),
+                environment: env.or("ENVIRONMENT", Environment::Development),
+                shutdown_timeout: env.seconds("SHUTDOWN_TIMEOUT_SECS", 30),
+            },
+            http: HttpConfig {
+                cors_allowed_origins: env.origins("CORS_ALLOWED_ORIGINS", "http://localhost:5173"),
+                request_timeout: env.seconds("REQUEST_TIMEOUT_SECS", 30),
+                body_limit: env.or("BODY_LIMIT_BYTES", 1024 * 1024),
+                trust_proxy: env.or("TRUST_PROXY", false),
+            },
+            rate_limit: RateLimitConfig {
+                requests_per_minute: env.or("RATE_LIMIT_RPM", NonZeroU32::new(120).unwrap()),
+                auth_requests_per_minute: env
+                    .or("RATE_LIMIT_AUTH_RPM", NonZeroU32::new(10).unwrap()),
             },
             database: DatabaseConfig {
                 url: env.required("DATABASE_URL"),
@@ -119,11 +198,43 @@ impl<F: Fn(&str) -> Option<String>> EnvReader<F> {
         match (self.get)(key) {
             None => default,
             Some(raw) => raw.trim().parse().unwrap_or_else(|_| {
-                self.errors
-                    .push(format!("{key} has an invalid value: {raw:?}"));
+                self.invalid(key, &raw);
                 default
             }),
         }
+    }
+
+    /// Durée en secondes, strictement positive.
+    fn seconds(&mut self, key: &str, default: u64) -> Duration {
+        let default = NonZeroU64::new(default).expect("default duration must be > 0");
+        Duration::from_secs(self.or(key, default).get())
+    }
+
+    /// Liste d'origines séparées par des virgules, chacune valide comme en-tête HTTP.
+    fn origins(&mut self, key: &str, default: &str) -> Vec<HeaderValue> {
+        let raw = (self.get)(key).unwrap_or_else(|| default.to_string());
+        let origins: Vec<HeaderValue> = raw
+            .split(',')
+            .map(str::trim)
+            .filter(|origin| !origin.is_empty())
+            .filter_map(|origin| match HeaderValue::from_str(origin) {
+                Ok(value) => Some(value),
+                Err(_) => {
+                    self.invalid(key, origin);
+                    None
+                }
+            })
+            .collect();
+        if origins.is_empty() {
+            self.errors
+                .push(format!("{key} must contain at least one origin"));
+        }
+        origins
+    }
+
+    fn invalid(&mut self, key: &str, raw: &str) {
+        self.errors
+            .push(format!("{key} has an invalid value: {raw:?}"));
     }
 }
 
@@ -146,10 +257,21 @@ mod tests {
         ("JWT_REFRESH_SECRET", "refresh"),
     ];
 
+    fn with(extra: &[(&'static str, &'static str)]) -> Result<Config, ConfigError> {
+        let mut vars = REQUIRED.to_vec();
+        vars.extend_from_slice(extra);
+        load(&vars)
+    }
+
     #[test]
     fn defaults_apply_when_optional_vars_are_missing() {
         let config = load(&REQUIRED).unwrap();
         assert_eq!(config.server.port, 8080);
+        assert_eq!(config.server.environment, Environment::Development);
+        assert_eq!(config.server.shutdown_timeout, Duration::from_secs(30));
+        assert_eq!(config.http.cors_allowed_origins, ["http://localhost:5173"]);
+        assert!(!config.http.trust_proxy);
+        assert_eq!(config.rate_limit.requests_per_minute.get(), 120);
         assert_eq!(config.database.max_connections, 10);
     }
 
@@ -166,8 +288,30 @@ mod tests {
 
     #[test]
     fn invalid_value_is_never_silently_replaced() {
-        let mut vars = REQUIRED.to_vec();
-        vars.push(("DATABASE_MAX_CONNECTIONS", "-1"));
-        assert!(load(&vars).is_err());
+        assert!(with(&[("DATABASE_MAX_CONNECTIONS", "-1")]).is_err());
+        assert!(with(&[("RATE_LIMIT_RPM", "0")]).is_err());
+        assert!(with(&[("REQUEST_TIMEOUT_SECS", "0")]).is_err());
+        assert!(with(&[("TRUST_PROXY", "yes")]).is_err());
+        assert!(with(&[("ENVIRONMENT", "staging")]).is_err());
+    }
+
+    #[test]
+    fn environment_accepts_short_names() {
+        let config = with(&[("ENVIRONMENT", "PROD")]).unwrap();
+        assert!(config.server.environment.is_production());
+    }
+
+    #[test]
+    fn cors_origins_are_a_comma_separated_list() {
+        let config = with(&[(
+            "CORS_ALLOWED_ORIGINS",
+            "https://app.example.com, http://localhost:5173",
+        )])
+        .unwrap();
+        assert_eq!(
+            config.http.cors_allowed_origins,
+            ["https://app.example.com", "http://localhost:5173"]
+        );
+        assert!(with(&[("CORS_ALLOWED_ORIGINS", " , ")]).is_err());
     }
 }

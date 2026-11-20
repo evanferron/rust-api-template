@@ -14,7 +14,7 @@ use crate::db;
 pub async fn run(config: Config) -> std::io::Result<()> {
     // --- Logger ---
     // Initialisé en premier pour capturer tous les logs suivants
-    telemetry::init(&config.server.environment);
+    telemetry::init(config.server.environment);
 
     tracing::info!(
         environment = %config.server.environment,
@@ -35,10 +35,7 @@ pub async fn run(config: Config) -> std::io::Result<()> {
     let app_state = AppState {
         pool,
         config: Arc::new(config.clone()),
-        rate_limit: RateLimitStore::new(
-            10,  // 10 req/min par IP sur login / register / refresh
-            120, // 120 req/min par utilisateur (ou par IP si anonyme) sur toute l'API
-        ),
+        rate_limit: RateLimitStore::new(&config.rate_limit),
     };
 
     // thread périodique qui vient nettoyer les caches des rate limiters pour éviter une croissance infinie en cas de nombreux clients uniques

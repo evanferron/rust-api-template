@@ -7,11 +7,11 @@
 //!   avec une limite stricte par IP contre le brute force.
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use axum::extract::{ConnectInfo, FromRequestParts, Request, State};
 use axum::http::request::Parts;
+use axum::http::{Extensions, HeaderMap};
 use axum::middleware::Next;
 use axum::response::Response;
 use governor::clock::{Clock, DefaultClock};
@@ -20,6 +20,7 @@ use governor::{NotUntil, Quota, RateLimiter, state::keyed::DefaultKeyedStateStor
 use crate::common::error::{ApiError, ErrorCode};
 use crate::common::jwt::{bearer_token, verify_token};
 use crate::common::state::AppState;
+use crate::config::RateLimitConfig;
 
 type KeyedLimiter<K> = Arc<RateLimiter<K, DefaultKeyedStateStore<K>, DefaultClock>>;
 
@@ -33,12 +34,14 @@ pub struct RateLimitStore {
 }
 
 impl RateLimitStore {
-    /// `auth_rpm` : requêtes/minute sur les routes d'authentification (par IP).
-    /// `default_rpm` : requêtes/minute sur toute l'API (par user ou IP).
-    pub fn new(auth_rpm: u32, default_rpm: u32) -> Self {
+    pub fn new(config: &RateLimitConfig) -> Self {
         Self {
-            by_client: Arc::new(RateLimiter::keyed(per_minute(default_rpm))),
-            auth: Arc::new(RateLimiter::keyed(per_minute(auth_rpm))),
+            by_client: Arc::new(RateLimiter::keyed(Quota::per_minute(
+                config.requests_per_minute,
+            ))),
+            auth: Arc::new(RateLimiter::keyed(Quota::per_minute(
+                config.auth_requests_per_minute,
+            ))),
         }
     }
 
@@ -47,10 +50,6 @@ impl RateLimitStore {
         self.by_client.retain_recent();
         self.auth.retain_recent();
     }
-}
-
-fn per_minute(rpm: u32) -> Quota {
-    Quota::per_minute(NonZeroU32::new(rpm).expect("rate limit must be > 0"))
 }
 
 /// Middleware global : identifie le client par son user id (token valide) ou son IP.
@@ -63,7 +62,7 @@ pub async fn rate_limit(
         .and_then(|token| verify_token(token, &state.config.jwt.secret).ok())
     {
         Some(claims) => format!("user:{}", claims.sub),
-        None => format!("ip:{}", client_ip(req.extensions())),
+        None => format!("ip:{}", client_ip(&state, req.headers(), req.extensions())),
     };
 
     state
@@ -89,7 +88,7 @@ impl FromRequestParts<AppState> for AuthRateLimit {
     type Rejection = ApiError;
 
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, ApiError> {
-        let ip = client_ip(&parts.extensions);
+        let ip = client_ip(state, &parts.headers, &parts.extensions);
         state.rate_limit.auth.check_key(&ip).map_err(|not_until| {
             tracing::warn!(ip = %ip, "Auth rate limit exceeded");
             rate_limited(not_until)
@@ -98,12 +97,38 @@ impl FromRequestParts<AppState> for AuthRateLimit {
     }
 }
 
-/// IP de la connexion TCP (attention : derrière un reverse proxy, c'est l'IP du proxy).
-fn client_ip(extensions: &axum::http::Extensions) -> IpAddr {
-    extensions
-        .get::<ConnectInfo<SocketAddr>>()
-        .map(|c| c.0.ip())
-        .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
+/// IP du client.
+///
+/// - Par défaut : IP de la connexion TCP.
+/// - Avec `TRUST_PROXY=true` : dernière IP de `X-Forwarded-For`, c'est-à-dire celle ajoutée
+///   par le reverse proxy (les entrées précédentes sont fournies par le client et falsifiables).
+///   À n'activer que si l'API n'est joignable **que** via ce proxy.
+fn client_ip(state: &AppState, headers: &HeaderMap, extensions: &Extensions) -> IpAddr {
+    let forwarded = state
+        .config
+        .http
+        .trust_proxy
+        .then(|| forwarded_ip(headers))
+        .flatten();
+
+    forwarded.unwrap_or_else(|| {
+        extensions
+            .get::<ConnectInfo<SocketAddr>>()
+            .map(|c| c.0.ip())
+            .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
+    })
+}
+
+fn forwarded_ip(headers: &HeaderMap) -> Option<IpAddr> {
+    headers
+        .get_all("x-forwarded-for")
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .flat_map(|v| v.split(','))
+        .last()?
+        .trim()
+        .parse()
+        .ok()
 }
 
 /// Erreur `RATE_LIMITED` avec l'en-tête `Retry-After` (secondes, arrondi au supérieur).
@@ -111,4 +136,19 @@ fn rate_limited(not_until: NotUntil<<DefaultClock as Clock>::Instant>) -> ApiErr
     let wait = not_until.wait_time_from(DefaultClock::default().now());
     let seconds = wait.as_secs() + u64::from(wait.subsec_nanos() > 0);
     ApiError::new(ErrorCode::RateLimited).with_retry_after(seconds.max(1))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn forwarded_ip_takes_the_entry_added_by_the_proxy() {
+        let mut headers = HeaderMap::new();
+        assert_eq!(forwarded_ip(&headers), None);
+        headers.insert("x-forwarded-for", "1.1.1.1, 2.2.2.2".parse().unwrap());
+        assert_eq!(forwarded_ip(&headers), Some("2.2.2.2".parse().unwrap()));
+        headers.insert("x-forwarded-for", "garbage".parse().unwrap());
+        assert_eq!(forwarded_ip(&headers), None);
+    }
 }

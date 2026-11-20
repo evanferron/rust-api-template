@@ -1,3 +1,4 @@
+use crate::config::Environment;
 use tracing_subscriber::{
     EnvFilter,
     fmt::{self, format::FmtSpan},
@@ -12,15 +13,15 @@ use tracing_subscriber::{
 ///
 /// Le niveau de log est contrôlable via la variable d'environnement `RUST_LOG`.
 /// Valeur par défaut : `info` pour l'app, `debug` pour tower_http (logs HTTP).
-pub fn init(environment: &str) {
+pub fn init(environment: Environment) {
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         // Par défaut : logs HTTP visibles, SQL masqué sauf si explicitement demandé
         EnvFilter::new("info,tower_http::trace::on_response=info,tower_http=off")
     });
 
     match environment {
-        "production" => init_json(env_filter),
-        _ => init_pretty(env_filter),
+        Environment::Production => init_json(env_filter),
+        Environment::Development => init_pretty(env_filter),
     }
 }
 

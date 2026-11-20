@@ -59,15 +59,7 @@ pub async fn login(
     let mut conn = state.pool.get().await?;
     let (response, refresh_token) = service::login(&mut conn, &state.config, payload).await?;
 
-    let cookie = Cookie::build(("refresh_token", refresh_token))
-        .http_only(true)
-        .secure(!cfg!(debug_assertions)) // false en dev (pas de HTTPS), true en prod
-        .same_site(SameSite::Strict)
-        .path("/api/auth/refresh")
-        .max_age(Duration::seconds(
-            state.config.jwt.refresh_expiration as i64,
-        ))
-        .build();
+    let cookie = refresh_cookie(&state, refresh_token, state.config.jwt.refresh_expiration);
 
     Ok((jar.add(cookie), Json(response)))
 }
@@ -102,15 +94,11 @@ pub async fn refresh(
 
     let (response, new_refresh_token) = service::refresh(&state.config, &refresh_token)?;
 
-    let cookie = Cookie::build(("refresh_token", new_refresh_token))
-        .http_only(true)
-        .secure(!cfg!(debug_assertions))
-        .same_site(SameSite::Strict)
-        .path("/api/auth/refresh")
-        .max_age(Duration::seconds(
-            state.config.jwt.refresh_expiration as i64,
-        ))
-        .build();
+    let cookie = refresh_cookie(
+        &state,
+        new_refresh_token,
+        state.config.jwt.refresh_expiration,
+    );
 
     Ok((jar.add(cookie), Json(response)))
 }
@@ -123,14 +111,19 @@ pub async fn refresh(
         (status = 204, description = "Déconnexion réussie — cookie supprimé"),
     )
 )]
-pub async fn logout(jar: CookieJar) -> impl IntoResponse {
-    let cookie = Cookie::build(("refresh_token", ""))
+pub async fn logout(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
+    let cookie = refresh_cookie(&state, String::new(), 0);
+    (jar.add(cookie), StatusCode::NO_CONTENT)
+}
+
+/// Cookie HttpOnly du refresh token, limité à la route de refresh.
+/// `Secure` en production uniquement (pas de HTTPS en local).
+fn refresh_cookie(state: &AppState, value: String, max_age_secs: u32) -> Cookie<'static> {
+    Cookie::build(("refresh_token", value))
         .http_only(true)
-        .secure(!cfg!(debug_assertions))
+        .secure(state.config.server.environment.is_production())
         .same_site(SameSite::Strict)
         .path("/api/auth/refresh")
-        .max_age(Duration::seconds(0))
-        .build();
-
-    (jar.add(cookie), StatusCode::NO_CONTENT)
+        .max_age(Duration::seconds(i64::from(max_age_secs)))
+        .build()
 }

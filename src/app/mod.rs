@@ -7,13 +7,11 @@ mod openapi;
 pub mod server;
 pub mod telemetry;
 
-use std::time::Duration;
-
 use axum::Router;
 use axum::body::Body;
 use axum::error_handling::HandleErrorLayer;
 use axum::extract::{DefaultBodyLimit, MatchedPath};
-use axum::http::{HeaderValue, Method, Request, header};
+use axum::http::{Method, Request, header};
 use tower::ServiceBuilder;
 use tower::timeout::TimeoutLayer;
 use tower_http::catch_panic::CatchPanicLayer;
@@ -29,12 +27,8 @@ use crate::common::error;
 use crate::common::middlewares::rate_limit::rate_limit;
 use crate::common::middlewares::request_id::{X_REQUEST_ID, request_id};
 use crate::common::state::AppState;
+use crate::config::HttpConfig;
 use crate::modules::{auth, health, post, user};
-
-/// Taille maximale d'un corps de requête.
-const BODY_LIMIT: usize = 1024 * 1024;
-/// Durée maximale de traitement d'une requête.
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Routes des modules, montées sous `/api`, avec leur documentation OpenAPI.
 ///
@@ -56,6 +50,7 @@ pub fn openapi_doc() -> utoipa::openapi::OpenApi {
 
 /// Construit le router complet : `/api/*`, Swagger UI, fallbacks et couches.
 pub fn build_app(state: AppState) -> Router {
+    let http = state.config.http.clone();
     let (api, doc) = api_router().split_for_parts();
     let api = api
         .layer(axum::middleware::from_fn_with_state(
@@ -71,13 +66,13 @@ pub fn build_app(state: AppState) -> Router {
         .fallback(error::route_not_found)
         .method_not_allowed_fallback(error::method_not_allowed)
         // Couches appliquées de la plus interne (haut) à la plus externe (bas)
-        .layer(DefaultBodyLimit::max(BODY_LIMIT)) // → PAYLOAD_TOO_LARGE
-        .layer(cors())
+        .layer(DefaultBodyLimit::max(http.body_limit)) // → PAYLOAD_TOO_LARGE
+        .layer(cors(&http))
         .layer(CompressionLayer::new())
         .layer(
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(error::handle_layer_error)) // → REQUEST_TIMEOUT
-                .layer(TimeoutLayer::new(REQUEST_TIMEOUT)),
+                .layer(TimeoutLayer::new(http.request_timeout)),
         )
         .layer(CatchPanicLayer::custom(error::handle_panic)) // panic → INTERNAL
         .layer(
@@ -90,14 +85,9 @@ pub fn build_app(state: AppState) -> Router {
         .layer(axum::middleware::from_fn(request_id)) // la plus externe : tout est tracé avec un id
 }
 
-fn cors() -> CorsLayer {
-    let origin = std::env::var("FRONTEND_URL")
-        .unwrap_or_else(|_| "http://localhost:5173".to_string())
-        .parse::<HeaderValue>()
-        .expect("FRONTEND_URL must be a valid header value");
-
+fn cors(http: &HttpConfig) -> CorsLayer {
     CorsLayer::new()
-        .allow_origin(origin)
+        .allow_origin(http.cors_allowed_origins.clone())
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
         .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION])
         .allow_credentials(true)

@@ -1,13 +1,14 @@
 use api::app::build_app;
 use api::common::middlewares::rate_limit::RateLimitStore;
 use api::common::state::AppState;
-use api::config::Config;
+use api::config::{Config, RateLimitConfig};
 use axum::Router;
 use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::bb8::Pool;
 use tokio::sync::OnceCell;
 
+use std::num::NonZeroU32;
 use std::sync::Arc;
 
 static TEST_APP: OnceCell<Router> = OnceCell::const_new();
@@ -63,7 +64,11 @@ pub async fn build_test_app() -> Router {
     let state = AppState {
         pool,
         config: Arc::new(config),
-        rate_limit: RateLimitStore::new(1000, 1000), // limites hautes pour ne pas bloquer les tests
+        // limites hautes pour ne pas bloquer les tests
+        rate_limit: RateLimitStore::new(&RateLimitConfig {
+            requests_per_minute: NonZeroU32::new(10_000).unwrap(),
+            auth_requests_per_minute: NonZeroU32::new(10_000).unwrap(),
+        }),
     };
 
     // Monte le même router que le serveur réel
