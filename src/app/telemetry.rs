@@ -1,23 +1,19 @@
 use crate::config::Environment;
-use tracing_subscriber::{
-    EnvFilter,
-    fmt::{self, format::FmtSpan},
-    layer::SubscriberExt,
-    util::SubscriberInitExt,
-};
+use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 /// Initialise le système de logs selon l'environnement.
 ///
 /// - `development` → texte coloré et lisible dans le terminal
 /// - `production`  → JSON structuré, une ligne par événement
 ///
-/// Le niveau de log est contrôlable via la variable d'environnement `RUST_LOG`.
-/// Valeur par défaut : `info` pour l'app, `debug` pour tower_http (logs HTTP).
+/// Niveau contrôlé par `RUST_LOG` (syntaxe `EnvFilter`). Par défaut `info` :
+/// logs de l'application + une ligne par requête HTTP (méthode, route, statut, latence, request_id).
+/// Les erreurs 5xx sont loggées une seule fois, avec leur cause, par `ApiError`.
+pub const DEFAULT_FILTER: &str = "info";
+
 pub fn init(environment: Environment) {
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        // Par défaut : logs HTTP visibles, SQL masqué sauf si explicitement demandé
-        EnvFilter::new("info,tower_http::trace::on_response=info,tower_http=off")
-    });
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(DEFAULT_FILTER));
 
     match environment {
         Environment::Production => init_json(env_filter),
@@ -49,8 +45,7 @@ fn init_json(env_filter: EnvFilter) {
                 .json()
                 .with_target(true)
                 .with_current_span(true) // inclut le contexte du span parent (ex: request_id)
-                .with_span_list(false) // évite la verbosité excessive
-                .with_span_events(FmtSpan::CLOSE),
+                .with_span_list(false), // évite la verbosité excessive
         )
         .init();
 }

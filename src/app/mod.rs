@@ -17,7 +17,7 @@ use tower::timeout::TimeoutLayer;
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::compression::CompressionLayer;
 use tower_http::cors::CorsLayer;
-use tower_http::trace::{DefaultOnFailure, DefaultOnResponse, TraceLayer};
+use tower_http::trace::{DefaultOnResponse, TraceLayer};
 use tracing::Level;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
@@ -80,7 +80,8 @@ pub fn build_app(state: AppState) -> Router {
                 .make_span_with(make_span)
                 .on_request(())
                 .on_response(DefaultOnResponse::new().level(Level::INFO))
-                .on_failure(DefaultOnFailure::new().level(Level::ERROR)),
+                // Les 5xx sont déjà loggées (avec leur cause) par ApiError : pas de doublon
+                .on_failure(()),
         )
         .layer(axum::middleware::from_fn(request_id)) // la plus externe : tout est tracé avec un id
 }
