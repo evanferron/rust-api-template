@@ -24,6 +24,30 @@ pub struct Claims {
 }
 
 // ---------------------------------------------------------------------------
+// Clés HMAC
+// ---------------------------------------------------------------------------
+
+/// Règles de validation des tokens : HS256, expiration vérifiée sans tolérance.
+fn validation() -> Validation {
+    Validation {
+        leeway: 0,
+        ..Validation::default()
+    }
+}
+
+/// Clé de signature HMAC. Échoue si le secret est vide.
+fn encoding_key(secret: &str) -> Result<EncodingKey, ApiError> {
+    EncodingKey::from_secret(secret.as_bytes())
+        .map_err(|e| ApiError::InternalServer(format!("Invalid JWT secret: {}", e)))
+}
+
+/// Clé de vérification HMAC. Échoue si le secret est vide.
+fn decoding_key(secret: &str) -> Result<DecodingKey, ApiError> {
+    DecodingKey::from_secret(secret.as_bytes())
+        .map_err(|e| ApiError::InternalServer(format!("Invalid JWT secret: {}", e)))
+}
+
+// ---------------------------------------------------------------------------
 // Access token
 // ---------------------------------------------------------------------------
 
@@ -44,7 +68,7 @@ pub fn create_token(user_id: Uuid, secret: &str, expiration: u32) -> Result<Stri
     encode(
         &Header::default(), // algorithme HS256 par défaut
         &claims,
-        &EncodingKey::from_secret(secret.as_bytes()),
+        &encoding_key(secret)?,
     )
     .map_err(|e| ApiError::InternalServer(format!("Failed to create token: {}", e)))
 }
@@ -52,23 +76,17 @@ pub fn create_token(user_id: Uuid, secret: &str, expiration: u32) -> Result<Stri
 /// Vérifie et décode un access token JWT.
 /// Retourne les `Claims` si le token est valide et non expiré.
 pub fn verify_token(token: &str, secret: &str) -> Result<Claims, ApiError> {
-    let mut validation = Validation::default();
-    validation.leeway = 0;
-    let token_data: TokenData<Claims> = decode(
-        token,
-        &DecodingKey::from_secret(secret.as_bytes()),
-        &validation,
-    )
-    .map_err(|e| match e.kind() {
-        jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
-            ApiError::Authentication("Token has expired".to_string())
-        }
-        jsonwebtoken::errors::ErrorKind::InvalidToken
-        | jsonwebtoken::errors::ErrorKind::InvalidSignature => {
-            ApiError::Authentication("Invalid token".to_string())
-        }
-        _ => ApiError::Authentication(format!("Token validation failed: {}", e)),
-    })?;
+    let token_data: TokenData<Claims> = decode(token, &decoding_key(secret)?, &validation())
+        .map_err(|e| match e.kind() {
+            jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
+                ApiError::Authentication("Token has expired".to_string())
+            }
+            jsonwebtoken::errors::ErrorKind::InvalidToken
+            | jsonwebtoken::errors::ErrorKind::InvalidSignature => {
+                ApiError::Authentication("Invalid token".to_string())
+            }
+            _ => ApiError::Authentication(format!("Token validation failed: {}", e)),
+        })?;
 
     Ok(token_data.claims)
 }
@@ -91,34 +109,23 @@ pub fn create_refresh_token(
         exp: (now + Duration::seconds(expiration as i64)).timestamp(),
     };
 
-    encode(
-        &Header::default(),
-        &claims,
-        &EncodingKey::from_secret(secret.as_bytes()),
-    )
-    .map_err(|e| ApiError::InternalServer(format!("Failed to create refresh token: {}", e)))
+    encode(&Header::default(), &claims, &encoding_key(secret)?)
+        .map_err(|e| ApiError::InternalServer(format!("Failed to create refresh token: {}", e)))
 }
 
 /// Vérifie et décode un refresh token JWT.
 pub fn verify_refresh_token(token: &str, secret: &str) -> Result<Claims, ApiError> {
-    let mut validation = Validation::default();
-    validation.leeway = 0;
-
-    let token_data: TokenData<Claims> = decode(
-        token,
-        &DecodingKey::from_secret(secret.as_bytes()),
-        &validation,
-    )
-    .map_err(|e| match e.kind() {
-        jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
-            ApiError::Authentication("Refresh token has expired".to_string())
-        }
-        jsonwebtoken::errors::ErrorKind::InvalidToken
-        | jsonwebtoken::errors::ErrorKind::InvalidSignature => {
-            ApiError::Authentication("Invalid refresh token".to_string())
-        }
-        _ => ApiError::Authentication(format!("Refresh token validation failed: {}", e)),
-    })?;
+    let token_data: TokenData<Claims> = decode(token, &decoding_key(secret)?, &validation())
+        .map_err(|e| match e.kind() {
+            jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
+                ApiError::Authentication("Refresh token has expired".to_string())
+            }
+            jsonwebtoken::errors::ErrorKind::InvalidToken
+            | jsonwebtoken::errors::ErrorKind::InvalidSignature => {
+                ApiError::Authentication("Invalid refresh token".to_string())
+            }
+            _ => ApiError::Authentication(format!("Refresh token validation failed: {}", e)),
+        })?;
 
     Ok(token_data.claims)
 }
@@ -169,7 +176,7 @@ mod tests {
     #[test]
     fn test_verify_expired_token() {
         use chrono::Utc;
-        use jsonwebtoken::{EncodingKey, Header, encode};
+        use jsonwebtoken::{Header, encode};
 
         // Crée manuellement un token avec exp dans le passé
         let claims = Claims {
@@ -181,7 +188,7 @@ mod tests {
         let token = encode(
             &Header::default(),
             &claims,
-            &EncodingKey::from_secret("secret".as_bytes()),
+            &encoding_key("secret").unwrap(),
         )
         .unwrap();
 

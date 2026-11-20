@@ -9,7 +9,7 @@ Template API REST production-ready — Axum 0.8 · Diesel 2 async · PostgreSQL 
 
 ## Prérequis
 
-- Rust 1.85+
+- Rust 1.89+
 - Docker (pour PostgreSQL)
 - `diesel_cli` : `cargo install diesel_cli --no-default-features --features postgres`
 
@@ -46,10 +46,10 @@ cargo run
 | Composant | Technologie |
 |-----------|-------------|
 | Framework | Axum 0.8 |
-| ORM | Diesel 2 + diesel-async 0.7 |
+| ORM | Diesel 2.4 + diesel-async 0.10 |
 | Base de données | PostgreSQL 16 |
 | Auth | JWT HS256 + refresh token (cookie HttpOnly) |
-| Validation | validator 0.19 |
+| Validation | validator 0.21 |
 | Doc API | utoipa + Swagger UI |
 | Rate limiting | governor (par IP + par user) |
 | Logs | tracing (pretty dev / JSON prod) |
@@ -116,7 +116,7 @@ JWT_REFRESH_SECRET=<générer avec openssl rand -base64 64>
 |-----|----------|
 | Format & Clippy | `cargo fmt --check` · `cargo clippy --all-targets -- -D warnings` |
 | Tests & Coverage | tous les tests sur PostgreSQL 16 + couverture (`cargo llvm-cov`) → SonarCloud |
-| Security audit | `cargo audit` (config : `.cargo/audit.toml`) |
+| Security audit | `cargo audit` (base RustSec) |
 
 Pour reproduire la CI en local :
 

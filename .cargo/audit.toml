@@ -1,8 +1,0 @@
-# Configuration de `cargo audit` (utilisée en local et par la CI).
-[advisories]
-ignore = [
-    # rsa — "Marvin Attack" (timing side-channel), sans correctif disponible.
-    # Tiré par jsonwebtoken (feature `rust_crypto`) ; l'API n'utilise que HS256 (HMAC),
-    # le code RSA n'est jamais exécuté.
-    "RUSTSEC-2023-0071",
-]

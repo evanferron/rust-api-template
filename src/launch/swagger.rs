@@ -204,6 +204,7 @@ mod tests {
 
     #[test]
     fn test_security_addon_scheme_is_http_bearer() {
+        use utoipa::openapi::RefOr;
         use utoipa::openapi::security::SecurityScheme;
 
         let mut doc = utoipa::openapi::OpenApiBuilder::new()
@@ -221,7 +222,7 @@ mod tests {
             .unwrap();
 
         assert!(
-            matches!(scheme, SecurityScheme::Http(_)),
+            matches!(scheme, RefOr::T(SecurityScheme::Http(_))),
             "le schéma devrait être Http"
         );
     }
