@@ -252,7 +252,7 @@ Pour reproduire la CI en local :
 cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test && cargo audit
 ```
 
-Le scan SonarCloud ne s'exécute que si le secret `SONAR_TOKEN` est configuré.
+Le scan SonarCloud ne s'exécute que si le secret `SONAR_TOKEN` est configuré. Pour un projet créé depuis le template : adapter `sonar.projectKey` et `sonar.organization` dans `sonar-project.properties`, ainsi que les badges en haut de ce README.
 
 ### Dependabot
 
@@ -263,19 +263,6 @@ Le scan SonarCloud ne s'exécute que si le secret `SONAR_TOKEN` est configuré.
 - **images Docker** (`rust`, `debian`) du `Dockerfile`.
 
 À activer une fois dans *Settings → Code security* : **Dependabot alerts** et **Dependabot security updates** (PR immédiates pour les dépendances vulnérables).
-
------|----------|
-| Format & Clippy | `cargo fmt --check` · `cargo clippy --all-targets -- -D warnings` |
-| Tests & Coverage | tous les tests sur PostgreSQL 16 + couverture (`cargo llvm-cov`) → SonarCloud |
-| Security audit | `cargo audit` (base RustSec) |
-
-Pour reproduire la CI en local :
-
-```bash
-cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test && cargo audit
-```
-
-Le scan SonarCloud ne s'exécute que si le secret `SONAR_TOKEN` est configuré.
 
 ---
 
