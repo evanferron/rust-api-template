@@ -39,9 +39,10 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 
 # Database
-diesel = { version = "2.4.0", features = ["postgres", "uuid", "chrono"] }
-diesel-async = { version = "0.10.0", features = ["postgres", "bb8"] }
-diesel_migrations = { version = "2.4.0", features = ["postgres"] }
+# `postgres_backend` (et non `postgres`) : pas de libpq, tout passe par diesel-async
+diesel = { version = "2.4.0", features = ["postgres_backend", "uuid", "chrono"] }
+diesel-async = { version = "0.10.0", features = ["postgres", "bb8", "migrations"] }
+diesel_migrations = "2.4.0"
 
 # Utils
 serde = { version = "1.0.229", features = ["derive"] }

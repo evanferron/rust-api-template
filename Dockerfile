@@ -3,12 +3,6 @@
 # =============================================================================
 FROM rust:1.94-slim-bookworm AS chef
 
-RUN apt-get update && apt-get install -y \
-    libpq-dev \
-    pkg-config \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
 RUN cargo install cargo-chef
 
 WORKDIR /app
@@ -38,7 +32,6 @@ RUN cargo build --release --bin server
 FROM debian:bookworm-slim AS runtime
 
 RUN apt-get update && apt-get install -y \
-    libpq5 \
     ca-certificates \
     curl \
     && rm -rf /var/lib/apt/lists/* \
@@ -46,8 +39,8 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
+# Les migrations sont embarquées dans le binaire (embed_migrations!)
 COPY --from=builder /app/target/release/server /app/server
-COPY --from=builder /app/migrations /app/migrations
 
 RUN chown -R appuser:appuser /app
 USER appuser

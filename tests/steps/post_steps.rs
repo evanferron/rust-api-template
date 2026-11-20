@@ -126,7 +126,7 @@ fn map_to_post_payload(data: &HashMap<String, String>) -> serde_json::Value {
 
 #[given("la base de données est réinitialisée")]
 async fn reset_database(_world: &mut PostsWorld) {
-    reset_db();
+    reset_db().await;
 }
 
 // ---------------------------------------------------------------------------

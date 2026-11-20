@@ -11,7 +11,11 @@ Template API REST production-ready — Axum 0.8 · Diesel 2 async · PostgreSQL 
 
 - Rust 1.89+
 - Docker (pour PostgreSQL)
-- `diesel_cli` : `cargo install diesel_cli --no-default-features --features postgres`
+- `diesel_cli` (création de migrations, régénération de `schema.rs`) :
+  `cargo install diesel_cli --no-default-features --features postgres-bundled`
+
+> L'API n'a pas besoin de `libpq` : tout passe par `diesel-async` (driver 100 % Rust).
+> Seul `diesel_cli` utilise libpq, compilée et embarquée grâce à la feature `postgres-bundled`.
 
 ---
 

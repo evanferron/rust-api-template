@@ -127,7 +127,7 @@ fn table_to_map(step: &Step) -> HashMap<String, String> {
 
 #[given("la base de données est réinitialisée")]
 async fn reset_database(_world: &mut UsersWorld) {
-    reset_db();
+    reset_db().await;
 }
 
 // ---------------------------------------------------------------------------

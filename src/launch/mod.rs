@@ -4,6 +4,7 @@ mod swagger;
 use crate::core::logger;
 use crate::core::middlewares::rate_limit::RateLimitStore;
 use crate::infra::config::Config;
+use crate::infra::database;
 use crate::infra::state::AppState;
 use crate::launch::router::create_router;
 use axum::BoxError;
@@ -11,9 +12,6 @@ use axum::Router;
 use axum::error_handling::HandleErrorLayer;
 use axum::extract::MatchedPath;
 use axum::http::{HeaderValue, StatusCode};
-use diesel_async::AsyncPgConnection;
-use diesel_async::pooled_connection::AsyncDieselConnectionManager;
-use diesel_async::pooled_connection::bb8::Pool;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -47,40 +45,16 @@ impl Server {
             "Starting server"
         );
 
-        // --- Database Pool ---
-        let manager = AsyncDieselConnectionManager::<AsyncPgConnection>::new(&config.database.url);
+        // --- Database ---
+        database::run_migrations(&config.database.url)
+            .await
+            .expect("Failed to run migrations");
+        tracing::info!("Migrations applied successfully");
 
-        let pool = Pool::builder()
-            .max_size(config.database.max_connections)
-            .connection_timeout(Duration::from_secs(config.database.acquire_timeout))
-            .idle_timeout(Some(Duration::from_secs(config.database.idle_timeout)))
-            .max_lifetime(Some(Duration::from_secs(config.database.max_lifetime)))
-            .build(manager)
+        let pool = database::create_pool(&config.database)
             .await
             .expect("Failed to create database pool");
-
         tracing::info!("Database pool created successfully");
-
-        // --- Migrations ---
-        {
-            use diesel::Connection;
-            use diesel::pg::PgConnection;
-            use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
-
-            const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
-            let db_url = config.database.url.clone();
-
-            tokio::task::spawn_blocking(move || {
-                let mut conn =
-                    PgConnection::establish(&db_url).expect("Failed to connect for migrations");
-                conn.run_pending_migrations(MIGRATIONS)
-                    .expect("Failed to run migrations");
-            })
-            .await
-            .expect("Migration task panicked");
-
-            tracing::info!("Migrations applied successfully");
-        }
 
         let app_state = AppState {
             pool,

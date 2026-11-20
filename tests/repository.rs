@@ -6,8 +6,6 @@
 //!
 //! Requiert `DATABASE_TEST_URL`.
 
-use std::sync::Once;
-
 use app::core::repository::prelude::*;
 use app::db::post::model::{NewPost, Post};
 use app::db::post::repository::PostRepository;
@@ -17,11 +15,10 @@ use app::db::user::repository::UserRepository;
 use chrono::{Duration, NaiveDateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
-use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
+use tokio::sync::OnceCell;
 use uuid::Uuid;
 
-const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
-static MIGRATED: Once = Once::new();
+static MIGRATED: OnceCell<()> = OnceCell::const_new();
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -35,11 +32,13 @@ fn test_db_url() -> String {
 /// Connexion dans une transaction de test (rollback automatique au drop).
 async fn test_conn() -> AsyncPgConnection {
     let url = test_db_url();
-    MIGRATED.call_once(|| {
-        let mut conn = diesel::PgConnection::establish(&url).expect("connect for migrations");
-        conn.run_pending_migrations(MIGRATIONS)
-            .expect("run migrations");
-    });
+    MIGRATED
+        .get_or_init(|| async {
+            app::infra::database::run_migrations(&url)
+                .await
+                .expect("run migrations");
+        })
+        .await;
 
     let mut conn = AsyncPgConnection::establish(&url)
         .await

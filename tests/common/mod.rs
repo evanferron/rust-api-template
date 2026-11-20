@@ -2,18 +2,12 @@ use app::infra::config::Config;
 use app::infra::state::AppState;
 use app::{core::middlewares::rate_limit::RateLimitStore, launch::router::create_router};
 use axum::Router;
-use diesel::Connection;
-use diesel::pg::PgConnection;
 use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::bb8::Pool;
-use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use tokio::sync::OnceCell;
 
-use std::sync::{Arc, Mutex};
-
-static DB_LOCK: Mutex<()> = Mutex::new(());
-const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
+use std::sync::Arc;
 
 static TEST_APP: OnceCell<Router> = OnceCell::const_new();
 
@@ -43,18 +37,11 @@ pub async fn test_pool() -> Pool<AsyncPgConnection> {
         .expect("Failed to create test pool")
 }
 
-pub fn reset_db() {
-    let _guard = DB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-
-    let db_url = test_db_url();
-    let mut conn =
-        PgConnection::establish(&db_url).expect("Failed to connect to test DB for reset");
-
-    conn.revert_all_migrations(MIGRATIONS)
-        .expect("Failed to revert migrations");
-
-    conn.run_pending_migrations(MIGRATIONS)
-        .expect("Failed to run migrations on test DB");
+/// Vide la base de test (revert + run de toutes les migrations).
+pub async fn reset_db() {
+    app::infra::database::reset_database(&test_db_url())
+        .await
+        .expect("Failed to reset test DB");
 }
 
 pub fn test_config() -> Config {

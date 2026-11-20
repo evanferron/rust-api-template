@@ -18,21 +18,21 @@ use crate::{
 #[tokio::main]
 async fn main() {
     // AUTH
-    reset_db();
+    reset_db().await;
     AuthWorld::cucumber()
         .max_concurrent_scenarios(1)
         .run("tests/features/auth.feature")
         .await;
 
     // POSTS
-    reset_db();
+    reset_db().await;
     PostsWorld::cucumber()
         .max_concurrent_scenarios(1)
         .run("tests/features/post.feature")
         .await;
 
     // USERS
-    reset_db();
+    reset_db().await;
     UsersWorld::cucumber()
         .max_concurrent_scenarios(1)
         .run("tests/features/user.feature")
