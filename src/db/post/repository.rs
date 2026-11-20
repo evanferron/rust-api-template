@@ -1,11 +1,10 @@
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper};
+use diesel::{QueryDsl, SelectableHelper};
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
 use crate::common::error::ApiError;
 use crate::db::post::model::{NewPost, Post, PostChangeset};
-use crate::db::schema::{posts, users};
-use crate::db::user::model::User;
+use crate::db::schema::posts;
 
 pub struct PostRepository;
 
@@ -45,21 +44,6 @@ impl PostRepository {
             .returning(Post::as_returning())
             .get_result::<Post>(conn)
             .await
-            .map_err(ApiError::from)
-    }
-
-    /// Exemple de jointure 1-N : un post avec son auteur.
-    pub async fn find_with_author(
-        conn: &mut AsyncPgConnection,
-        post_id: Uuid,
-    ) -> Result<Option<(Post, User)>, ApiError> {
-        posts::table
-            .inner_join(users::table)
-            .filter(posts::id.eq(post_id))
-            .select((Post::as_select(), User::as_select()))
-            .first::<(Post, User)>(conn)
-            .await
-            .optional()
             .map_err(ApiError::from)
     }
 }
