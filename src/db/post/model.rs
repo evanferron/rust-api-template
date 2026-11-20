@@ -1,11 +1,8 @@
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, Queryable, Selectable, Identifiable, Associations,
-)]
+#[derive(Debug, Clone, Queryable, Selectable, Identifiable, Associations)]
 #[diesel(table_name = crate::db::schema::posts)]
 #[diesel(belongs_to(crate::db::user::model::User))] // Permet de faire des jointures avec User via user_id
 #[diesel(check_for_backend(diesel::pg::Pg))]

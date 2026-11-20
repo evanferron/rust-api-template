@@ -1,11 +1,11 @@
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Modèle Diesel représentant une ligne de la table `users`.
-/// Utilisé pour les lectures (SELECT).
-#[derive(Debug, Clone, Serialize, Deserialize, Queryable, Selectable, Identifiable)]
+/// Utilisé pour les lectures (SELECT). Volontairement non sérialisable : il contient le hash
+/// du mot de passe, l'API expose des DTO (`UserResponse`, `RegisterResponse`).
+#[derive(Debug, Clone, Queryable, Selectable, Identifiable)]
 #[diesel(table_name = crate::db::schema::users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct User {
