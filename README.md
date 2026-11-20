@@ -64,27 +64,20 @@ src/
 ├── db/            ← modèles et repositories Diesel (un dossier par entité)
 ├── infra/         ← Config, AppState
 ├── launch/        ← assemblage du router, Swagger
-├── modules/       ← logique métier (auth, user, post...)
-└── bin/
-    └── generate.rs ← générateur de modules
+└── modules/       ← logique métier (auth, user, post...)
 ```
 
 ---
 
 ## Ajouter un module
 
-```bash
-cargo run --bin generate -- generate <nom>
-```
+Prendre le module `post` comme référence (`src/db/post/` + `src/modules/post/`) :
 
-Génère automatiquement la migration, le modèle, le repository, les DTOs, le service, le handler et les routes.
-
-Ensuite :
-
-1. Compléter `migrations/.../up.sql`
-2. `diesel migration run`
-3. Ajouter `pub mod <nom>;` dans `src/db/mod.rs` et `src/modules/mod.rs`
-4. Brancher dans `src/launch/router.rs`
+1. Créer la migration : `diesel migration generate create_<nom>s`
+2. `diesel migration run` (régénère `src/db/schema.rs`)
+3. Créer `src/db/<nom>/` (model + repository) et `src/modules/<nom>/` (dto, service, handler, routes)
+4. Ajouter `pub mod <nom>;` dans `src/db/mod.rs` et `src/modules/mod.rs`
+5. Brancher les routes dans `src/launch/router.rs` et les déclarer dans `src/launch/swagger.rs`
 
 ---
 
