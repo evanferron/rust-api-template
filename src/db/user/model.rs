@@ -19,12 +19,11 @@ pub struct User {
 }
 
 /// Modèle utilisé pour les insertions (INSERT INTO).
-/// Ne contient pas created_at / updated_at — gérés par la DB (DEFAULT NOW()).
+/// Ne contient ni `id` (`gen_random_uuid()`) ni `created_at` / `updated_at` (`NOW()`) : générés par la base.
 #[derive(Debug, Insertable)]
 #[diesel(table_name = crate::db::schema::users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct NewUser {
-    pub id: Uuid,
     pub email: String,
     pub password: String,
     pub first_name: String,

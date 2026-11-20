@@ -125,7 +125,8 @@ Ordre des paramètres d'un handler : `_: AuthRateLimit` (routes d'authentificati
    DROP TABLE IF EXISTS comments;
    ```
    Conventions : UUID, `TIMESTAMPTZ` (jamais `TIMESTAMP`), `diesel_manage_updated_at` sur chaque table
-   ayant `updated_at`, index sur les clés étrangères.
+   ayant `updated_at`, index sur les clés étrangères. `id`, `created_at` et `updated_at` sont générés par
+   la base : ils n'apparaissent pas dans la struct `New<Model>` d'insertion.
 2. `diesel migration run` → `src/db/schema.rs` est régénéré (ne pas l'éditer à la main).
 3. `src/db/<table>/` avec `mod.rs`, `model.rs`, `repository.rs` (copier `db/post`), puis `pub mod <table>;`
    dans `src/db/mod.rs`. Dates : `chrono::DateTime<Utc>`.

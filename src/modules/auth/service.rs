@@ -25,7 +25,6 @@ pub async fn register(
 
     let hashed_password = hash_password(&payload.password).await?;
     let new_user = NewUser {
-        id: Uuid::new_v4(),
         email: payload.email,
         password: hashed_password,
         first_name: payload.first_name,

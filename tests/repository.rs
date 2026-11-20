@@ -49,7 +49,6 @@ async fn seed_user(conn: &mut AsyncPgConnection) -> User {
     UserRepository::create(
         conn,
         NewUser {
-            id: Uuid::new_v4(),
             email: format!("{}@test.com", Uuid::new_v4()),
             password: "hash".to_string(),
             first_name: "Test".to_string(),
@@ -65,7 +64,6 @@ async fn seed_post(conn: &mut AsyncPgConnection, user_id: Uuid, created_at: Date
     let post = PostRepository::create(
         conn,
         NewPost {
-            id: Uuid::new_v4(),
             user_id,
             title: "title".to_string(),
             content: "content".to_string(),

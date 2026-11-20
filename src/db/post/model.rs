@@ -16,12 +16,12 @@ pub struct Post {
     pub updated_at: DateTime<Utc>,
 }
 
-/// Modèle pour les insertions.
+/// Modèle utilisé pour les insertions (INSERT INTO).
+/// Ne contient ni `id` (`gen_random_uuid()`) ni `created_at` / `updated_at` (`NOW()`) : générés par la base.
 #[derive(Debug, Insertable)]
 #[diesel(table_name = crate::db::schema::posts)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct NewPost {
-    pub id: Uuid,
     pub user_id: Uuid,
     pub title: String,
     pub content: String,

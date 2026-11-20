@@ -31,7 +31,6 @@ pub async fn create(
     payload: CreatePostRequest,
 ) -> Result<PostResponse, ApiError> {
     let new_post = NewPost {
-        id: Uuid::new_v4(),
         user_id,
         title: payload.title,
         content: payload.content,
