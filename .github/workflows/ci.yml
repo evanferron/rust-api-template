@@ -1,5 +1,8 @@
 name: CI
 
+# Contrôle qualité bloquant : format, lint, tests.
+# L'audit des dépendances est dans security-audit.yml (non bloquant pour pouvoir livrer un hotfix).
+
 on:
   push:
   pull_request:
@@ -86,17 +89,3 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # ---------------------------------------------------------------------------
-  # Vulnérabilités connues (RustSec)
-  # ---------------------------------------------------------------------------
-  audit:
-    name: Security audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: taiki-e/install-action@cargo-audit
-
-      - name: cargo audit
-        run: cargo audit

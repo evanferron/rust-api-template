@@ -240,10 +240,23 @@ JWT_REFRESH_SECRET=<générer avec openssl rand -base64 64>
 
 ## CI
 
-`.github/workflows/ci.yml` — sur chaque push et pull request, trois jobs en parallèle :
+| Workflow | Déclencheur | Contrôle | Bloquant |
+|----------|-------------|----------|----------|
+| `ci.yml` — Format & Clippy | chaque push / PR | `cargo fmt --check` · `cargo clippy --all-targets -- -D warnings` | oui |
+| `ci.yml` — Tests & Coverage | chaque push / PR | tous les tests sur PostgreSQL 16 + couverture (`cargo llvm-cov`) → SonarCloud | oui |
+| `security-audit.yml` | quotidien · modification de `Cargo.toml` / `Cargo.lock` · manuel | `cargo audit` (base RustSec) | non |
 
-| Job | Contrôle |
-|-----|----------|
+L'audit est séparé de la CI pour qu'une vulnérabilité découverte dans une dépendance n'empêche pas de livrer un hotfix : le workflow passe au rouge (notification GitHub) et la correction se fait par une mise à jour de la dépendance. Ne pas le déclarer comme *required status check*.
+
+Pour reproduire la CI en local :
+
+```bash
+cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test && cargo audit
+```
+
+Le scan SonarCloud ne s'exécute que si le secret `SONAR_TOKEN` est configuré.
+
+-----|----------|
 | Format & Clippy | `cargo fmt --check` · `cargo clippy --all-targets -- -D warnings` |
 | Tests & Coverage | tous les tests sur PostgreSQL 16 + couverture (`cargo llvm-cov`) → SonarCloud |
 | Security audit | `cargo audit` (base RustSec) |

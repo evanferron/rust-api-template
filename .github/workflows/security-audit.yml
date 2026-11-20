@@ -1,0 +1,37 @@
+name: Security audit
+
+# Vulnérabilités connues des dépendances (base RustSec).
+#
+# Volontairement séparé de la CI : une vulnérabilité découverte dans une dépendance ne doit
+# pas empêcher de livrer un hotfix. Le workflow passe au rouge et GitHub notifie par email,
+# la correction arrive via une PR Dependabot (ou cargo update).
+#
+# Ne pas déclarer ce workflow comme "required status check" dans la protection de branche.
+
+on:
+  schedule:
+    - cron: "0 5 * * *" # tous les jours (UTC) : détecte les nouvelles failles sans changement de code
+  push:
+    paths:
+      - Cargo.toml
+      - Cargo.lock
+  pull_request:
+    paths:
+      - Cargo.toml
+      - Cargo.lock
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: cargo audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: taiki-e/install-action@cargo-audit
+
+      - name: cargo audit
+        run: cargo audit
