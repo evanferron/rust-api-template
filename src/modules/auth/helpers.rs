@@ -9,7 +9,8 @@ use crate::core::errors::ApiError;
 // Claims
 // ---------------------------------------------------------------------------
 
-/// Claims embarqués dans le JWT access token.
+/// Claims embarqués dans les JWT (access token et refresh token).
+/// Les deux tokens partagent la même structure mais sont signés avec des secrets distincts.
 /// Injectés dans les extensions de la requête par `require_auth`,
 /// puis extraits dans les handlers via `Extension<Claims>`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,15 +20,6 @@ pub struct Claims {
     /// Issued at (timestamp Unix)
     pub iat: i64,
     /// Expiration (timestamp Unix)
-    pub exp: i64,
-}
-
-/// Claims embarqués dans le JWT refresh token.
-/// Contient uniquement l'identité, pas de rôle ni de données sensibles.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RefreshClaims {
-    pub sub: Uuid,
-    pub iat: i64,
     pub exp: i64,
 }
 
@@ -93,7 +85,7 @@ pub fn create_refresh_token(
     expiration: u32,
 ) -> Result<String, ApiError> {
     let now = Utc::now();
-    let claims = RefreshClaims {
+    let claims = Claims {
         sub: user_id,
         iat: now.timestamp(),
         exp: (now + Duration::seconds(expiration as i64)).timestamp(),
@@ -108,11 +100,11 @@ pub fn create_refresh_token(
 }
 
 /// Vérifie et décode un refresh token JWT.
-pub fn verify_refresh_token(token: &str, secret: &str) -> Result<RefreshClaims, ApiError> {
+pub fn verify_refresh_token(token: &str, secret: &str) -> Result<Claims, ApiError> {
     let mut validation = Validation::default();
     validation.leeway = 0;
 
-    let token_data: TokenData<RefreshClaims> = decode(
+    let token_data: TokenData<Claims> = decode(
         token,
         &DecodingKey::from_secret(secret.as_bytes()),
         &validation,
