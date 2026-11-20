@@ -35,16 +35,18 @@ pub async fn get_all(
     responses(
         (status = 200, body = PostResponse),
         (status = 401, body = ErrorResponse),
-        (status = 404, body = ErrorResponse),
+        (status = 404, description = "Post inexistant, ou brouillon d'un autre utilisateur (POST_NOT_FOUND)", body = ErrorResponse),
     )
 )]
 pub async fn get_by_id(
     State(state): State<AppState>,
-    _user: AuthUser,
+    user: AuthUser,
     ValidatedPath(params): ValidatedPath<UuidParam>,
 ) -> Result<Json<PostResponse>, ApiError> {
     let mut conn = state.pool.get().await?;
-    Ok(Json(service::get_by_id(&mut conn, params.id).await?))
+    Ok(Json(
+        service::get_by_id(&mut conn, user.id, params.id).await?,
+    ))
 }
 
 #[utoipa::path(

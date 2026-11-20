@@ -53,7 +53,7 @@ Tous sous `/api`. La documentation complète (paramètres, corps, réponses) est
 | health | `GET /health/live` · `GET /health/ready` | non |
 | auth | `POST /auth/register` · `POST /auth/login` · `POST /auth/refresh` · `POST /auth/logout` | non (limite stricte par IP sur register / login / refresh) |
 | users | `GET /users` (paginé) · `GET /users/{id}` · `PUT /users/{id}` · `DELETE /users/{id}` | Bearer JWT ; modification et suppression de son propre compte uniquement |
-| posts | `GET /posts` (paginé, ses propres posts) · `POST /posts` · `GET /posts/{id}` · `PUT /posts/{id}` · `DELETE /posts/{id}` | Bearer JWT ; modification et suppression de ses propres posts uniquement |
+| posts | `GET /posts` (paginé, ses propres posts) · `POST /posts` · `GET /posts/{id}` · `PUT /posts/{id}` · `DELETE /posts/{id}` | Bearer JWT ; brouillons (`published=false`) visibles par leur auteur seulement ; modification et suppression de ses propres posts uniquement |
 
 `users` et `posts` sont des modules d'exemple : `posts` sert de modèle pour les nouveaux modules.
 

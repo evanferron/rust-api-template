@@ -21,8 +21,18 @@ pub async fn get_all_by_user(
     Ok(page.map(PostResponse::from))
 }
 
-pub async fn get_by_id(conn: &mut AsyncPgConnection, id: Uuid) -> Result<PostResponse, ApiError> {
-    find_existing(conn, id).await.map(PostResponse::from)
+/// Post `id`. Un brouillon (`published = false`) n'est visible que par son auteur :
+/// pour les autres, il n'existe pas (`POST_NOT_FOUND`).
+pub async fn get_by_id(
+    conn: &mut AsyncPgConnection,
+    user_id: Uuid,
+    id: Uuid,
+) -> Result<PostResponse, ApiError> {
+    let post = find_existing(conn, id).await?;
+    if !post.published && post.user_id != user_id {
+        return Err(ErrorCode::PostNotFound.into());
+    }
+    Ok(PostResponse::from(post))
 }
 
 pub async fn create(
