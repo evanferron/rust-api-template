@@ -52,6 +52,7 @@ pub async fn get_by_id(
         (status = 401, body = ErrorResponse),
         (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
+        (status = 409, description = "Email déjà utilisé (EMAIL_ALREADY_USED)", body = ErrorResponse),
     )
 )]
 pub async fn update(

@@ -53,6 +53,15 @@ Feature: Users
         And la réponse contient:
             | first_name | Updated |
 
+    Scenario: Modifier son email pour un email déjà utilisé échoue
+        Given je suis connecté en tant que "taken@test.com" avec le mot de passe "securepass"
+        And je suis connecté en tant que "update@test.com" avec le mot de passe "securepass"
+        When je modifie mon profil avec:
+            | email | taken@test.com |
+        Then le statut de la réponse est 409
+        And la réponse contient:
+            | code | EMAIL_ALREADY_USED |
+
     Scenario: Modifier le profil d'un autre utilisateur est interdit
         Given je suis connecté en tant que "user_a@test.com" avec le mot de passe "securepass"
         And je suis connecté en tant que "user_b@test.com" avec le mot de passe "securepass"

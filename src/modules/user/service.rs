@@ -33,6 +33,13 @@ pub async fn update(
         .await?
         .ok_or(ErrorCode::UserNotFound)?;
 
+    if let Some(email) = &payload.email
+        && email != &user.email
+        && UserRepository::find_by_email(conn, email).await?.is_some()
+    {
+        return Err(ErrorCode::EmailAlreadyUsed.into());
+    }
+
     // La présence de current_password quand new_password est fourni
     // est garantie par la validation du DTO (validate_password_change).
     let new_password = match (&payload.new_password, &payload.current_password) {
