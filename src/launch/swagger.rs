@@ -5,6 +5,7 @@ use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
 use crate::core::errors::ErrorResponse;
 use crate::modules::auth::dto::{LoginRequest, LoginResponse, RefreshResponse, RegisterRequest};
 use crate::modules::health::dto::HealthResponse;
+use crate::modules::post::dto::{CreatePostRequest, PostResponse, UpdatePostRequest};
 use crate::modules::user::dto::{UpdateUserRequest, UserResponse};
 
 #[derive(OpenApi)]
@@ -18,7 +19,12 @@ use crate::modules::user::dto::{UpdateUserRequest, UserResponse};
         crate::modules::user::handler::get_by_id,
         crate::modules::user::handler::update,
         crate::modules::user::handler::delete,
-        crate::modules::auth::handler::logout
+        crate::modules::auth::handler::logout,
+        crate::modules::post::handler::get_all,
+        crate::modules::post::handler::get_by_id,
+        crate::modules::post::handler::create,
+        crate::modules::post::handler::update,
+        crate::modules::post::handler::delete,
     ),
     components(
         schemas(
@@ -30,12 +36,16 @@ use crate::modules::user::dto::{UpdateUserRequest, UserResponse};
             RefreshResponse,
             UserResponse,
             UpdateUserRequest,
+            PostResponse,
+            CreatePostRequest,
+            UpdatePostRequest,
         )
     ),
     tags(
         (name = "health", description = "Vérification de l'état du serveur"),
         (name = "auth",   description = "Authentification et gestion des tokens"),
         (name = "users",  description = "Gestion des utilisateurs"),
+        (name = "posts",  description = "Gestion des posts"),
     ),
     info(
         title = "API Template",
@@ -97,6 +107,7 @@ mod tests {
         assert!(tags.contains(&"health"), "tag 'health' manquant");
         assert!(tags.contains(&"auth"), "tag 'auth' manquant");
         assert!(tags.contains(&"users"), "tag 'users' manquant");
+        assert!(tags.contains(&"posts"), "tag 'posts' manquant");
     }
 
     // ─── Paths ───────────────────────────────────────────────────────────────
@@ -128,6 +139,17 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_openapi_post_paths_exist() {
+        let doc = build_doc();
+        let paths = &doc.paths.paths;
+        assert!(paths.contains_key("/api/posts"), "/api/posts manquant");
+        assert!(
+            paths.contains_key("/api/posts/{id}"),
+            "/api/posts/{{id}} manquant"
+        );
+    }
+
     // ─── Schemas ─────────────────────────────────────────────────────────────
 
     #[test]
@@ -148,6 +170,9 @@ mod tests {
             "RefreshResponse",
             "UserResponse",
             "UpdateUserRequest",
+            "PostResponse",
+            "CreatePostRequest",
+            "UpdatePostRequest",
         ];
 
         for name in &expected {
