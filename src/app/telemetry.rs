@@ -9,7 +9,7 @@ use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberI
 /// Niveau contrôlé par `RUST_LOG` (syntaxe `EnvFilter`). Par défaut `info` :
 /// logs de l'application + une ligne par requête HTTP (méthode, route, statut, latence, request_id).
 /// Les erreurs 5xx sont loggées une seule fois, avec leur cause, par `ApiError`.
-pub const DEFAULT_FILTER: &str = "info";
+const DEFAULT_FILTER: &str = "info";
 
 pub fn init(environment: Environment) {
     let env_filter =

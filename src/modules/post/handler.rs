@@ -1,10 +1,11 @@
+use axum::{Json, extract::State, http::StatusCode};
+
 use crate::common::error::{ApiError, ErrorResponse};
 use crate::common::extract::{AuthUser, UuidParam, ValidatedJson, ValidatedPath, ValidatedQuery};
 use crate::common::pagination::{PaginatedResponse, PaginationParams, PaginationQuery};
 use crate::common::state::AppState;
 use crate::modules::post::dto::{CreatePostRequest, PostResponse, UpdatePostRequest};
 use crate::modules::post::service;
-use axum::{Json, extract::State, http::StatusCode};
 
 #[utoipa::path(
     get, path = "/posts", tag = "posts",

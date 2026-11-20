@@ -14,7 +14,6 @@ name = "server"
 path = "src/main.rs"
 
 [profile.release]
-opt-level = 3
 lto = true        # Link Time Optimization — binaire plus rapide
 codegen-units = 1 # Meilleure optimisation, build plus lent
 strip = true      # Supprime les symboles de debug — binaire plus petit

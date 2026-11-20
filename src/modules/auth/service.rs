@@ -8,6 +8,7 @@ use crate::config::Config;
 use crate::db::user::model::NewUser;
 use crate::db::user::repository::UserRepository;
 use crate::modules::auth::dto::{LoginRequest, RegisterRequest, RegisterResponse, TokenResponse};
+
 // ---------------------------------------------------------------------------
 // Register
 // ---------------------------------------------------------------------------

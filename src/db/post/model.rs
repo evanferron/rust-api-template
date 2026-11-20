@@ -2,6 +2,8 @@ use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use uuid::Uuid;
 
+/// Modèle Diesel représentant une ligne de la table `posts` (lectures).
+/// Non sérialisable : l'API expose le DTO `PostResponse`.
 #[derive(Debug, Clone, Queryable, Selectable, Identifiable, Associations)]
 #[diesel(table_name = crate::db::schema::posts)]
 #[diesel(belongs_to(crate::db::user::model::User))] // Permet de faire des jointures avec User via user_id
@@ -28,7 +30,9 @@ pub struct NewPost {
     pub published: bool,
 }
 
-#[derive(diesel::AsChangeset)]
+/// Modèle utilisé pour les mises à jour partielles (UPDATE).
+/// Tous les champs sont optionnels — seuls les champs `Some` sont mis à jour.
+#[derive(Debug, AsChangeset)]
 #[diesel(table_name = crate::db::schema::posts)]
 pub struct PostChangeset {
     pub title: Option<String>,

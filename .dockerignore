@@ -18,4 +18,4 @@ Dockerfile
 # Outils externes
 script/
 sonar-project.properties
-README.md
+*.md
