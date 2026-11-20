@@ -80,12 +80,11 @@ mod tests {
     // ─── Paths ───────────────────────────────────────────────────────────────
 
     #[test]
-    fn test_openapi_health_path_exists() {
+    fn test_openapi_health_paths_exist() {
         let doc = build_doc();
-        assert!(
-            doc.paths.paths.contains_key("/api/health"),
-            "/api/health manquant"
-        );
+        for path in ["/api/health/live", "/api/health/ready"] {
+            assert!(doc.paths.paths.contains_key(path), "{path} manquant");
+        }
     }
 
     #[test]

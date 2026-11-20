@@ -58,10 +58,15 @@ pub fn test_config() -> Config {
 /// Construit l'AppState et le Router complet identiques à la prod.
 /// Les steps Cucumber envoient leurs requêtes via `tower::ServiceExt::oneshot`.
 pub async fn build_test_app() -> Router {
+    build_app(test_state().await)
+}
+
+/// État de test : base de test, config `.env`, limites de débit très hautes.
+pub async fn test_state() -> AppState {
     let config = test_config();
     let pool = test_pool().await;
 
-    let state = AppState {
+    AppState {
         pool,
         config: Arc::new(config),
         // limites hautes pour ne pas bloquer les tests
@@ -69,10 +74,8 @@ pub async fn build_test_app() -> Router {
             requests_per_minute: NonZeroU32::new(10_000).unwrap(),
             auth_requests_per_minute: NonZeroU32::new(10_000).unwrap(),
         }),
-    };
-
-    // Monte le même router que le serveur réel
-    build_app(state)
+        shutting_down: Default::default(),
+    }
 }
 
 // ---------------------------------------------------------------------------

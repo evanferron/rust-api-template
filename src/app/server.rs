@@ -7,6 +7,7 @@
 use std::future::IntoFuture;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use tokio::sync::watch;
@@ -40,7 +41,9 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
         pool,
         config: Arc::new(config.clone()),
         rate_limit: RateLimitStore::new(&config.rate_limit),
+        shutting_down: Arc::new(AtomicBool::new(false)),
     };
+    let shutting_down = state.shutting_down.clone();
 
     // `true` une fois le signal d'arrêt reçu
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
@@ -58,6 +61,7 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
     tokio::spawn(async move {
         wait_for_signal().await;
         tracing::info!("Shutdown signal received, finishing in-flight requests");
+        shutting_down.store(true, Ordering::Relaxed); // /health/ready → 503
         let _ = shutdown_tx.send(true);
     });
 

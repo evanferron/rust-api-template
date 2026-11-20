@@ -52,6 +52,6 @@ ENV RUST_LOG=info
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8080/api/health || exit 1
+    CMD curl -f http://localhost:8080/api/health/live || exit 1
 
 CMD ["/app/server"]
