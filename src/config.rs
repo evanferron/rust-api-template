@@ -53,16 +53,21 @@ pub struct RateLimitConfig {
 pub struct DatabaseConfig {
     pub url: String,
     pub max_connections: u32,
-    pub acquire_timeout: u64,
-    pub idle_timeout: u64,
-    pub max_lifetime: u64,
+    /// Attente maximale d'une connexion du pool.
+    pub acquire_timeout: Duration,
+    /// Durée après laquelle une connexion inutilisée est fermée.
+    pub idle_timeout: Duration,
+    /// Durée de vie maximale d'une connexion.
+    pub max_lifetime: Duration,
 }
 
 #[derive(Debug, Clone)]
 pub struct JwtConfig {
     pub secret: String,
+    /// Durée de vie de l'access token, en secondes.
     pub expiration: u32,
     pub refresh_secret: String,
+    /// Durée de vie du refresh token, en secondes.
     pub refresh_expiration: u32,
 }
 
@@ -155,17 +160,24 @@ impl Config {
             database: DatabaseConfig {
                 url: env.required("DATABASE_URL"),
                 max_connections: env.or("DATABASE_MAX_CONNECTIONS", 10),
-                acquire_timeout: env.or("DATABASE_ACQUIRE_TIMEOUT", 30),
-                idle_timeout: env.or("DATABASE_IDLE_TIMEOUT", 600),
-                max_lifetime: env.or("DATABASE_MAX_LIFETIME", 1800),
+                acquire_timeout: env.seconds("DATABASE_ACQUIRE_TIMEOUT_SECS", 30),
+                idle_timeout: env.seconds("DATABASE_IDLE_TIMEOUT_SECS", 600),
+                max_lifetime: env.seconds("DATABASE_MAX_LIFETIME_SECS", 1800),
             },
             jwt: JwtConfig {
                 secret: env.required("JWT_SECRET"),
-                expiration: env.or("JWT_EXPIRATION", 86400),
+                expiration: env.or("JWT_EXPIRATION_SECS", 86400),
                 refresh_secret: env.required("JWT_REFRESH_SECRET"),
-                refresh_expiration: env.or("JWT_REFRESH_EXPIRATION", 604800),
+                refresh_expiration: env.or("JWT_REFRESH_EXPIRATION_SECS", 604800),
             },
         };
+
+        // Une variable renommée est une erreur explicite plutôt qu'une valeur ignorée en silence
+        for (old, new) in RENAMED_VARS {
+            if (env.get)(old).is_some() {
+                env.errors.push(format!("{old} has been renamed to {new}"));
+            }
+        }
 
         if env.errors.is_empty() {
             Ok(config)
@@ -174,6 +186,16 @@ impl Config {
         }
     }
 }
+
+/// Anciennes variables → nouveau nom.
+const RENAMED_VARS: [(&str, &str); 6] = [
+    ("FRONTEND_URL", "CORS_ALLOWED_ORIGINS"),
+    ("DATABASE_ACQUIRE_TIMEOUT", "DATABASE_ACQUIRE_TIMEOUT_SECS"),
+    ("DATABASE_IDLE_TIMEOUT", "DATABASE_IDLE_TIMEOUT_SECS"),
+    ("DATABASE_MAX_LIFETIME", "DATABASE_MAX_LIFETIME_SECS"),
+    ("JWT_EXPIRATION", "JWT_EXPIRATION_SECS"),
+    ("JWT_REFRESH_EXPIRATION", "JWT_REFRESH_EXPIRATION_SECS"),
+];
 
 /// Lit les variables en accumulant les erreurs au lieu de s'arrêter à la première.
 struct EnvReader<F> {
@@ -293,6 +315,15 @@ mod tests {
         assert!(with(&[("REQUEST_TIMEOUT_SECS", "0")]).is_err());
         assert!(with(&[("TRUST_PROXY", "yes")]).is_err());
         assert!(with(&[("ENVIRONMENT", "staging")]).is_err());
+    }
+
+    #[test]
+    fn renamed_variables_are_reported() {
+        let err = with(&[("JWT_EXPIRATION", "3600")]).unwrap_err();
+        assert_eq!(
+            err.0,
+            ["JWT_EXPIRATION has been renamed to JWT_EXPIRATION_SECS"]
+        );
     }
 
     #[test]

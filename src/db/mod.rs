@@ -11,8 +11,6 @@ pub mod repository;
 pub mod schema;
 pub mod user;
 
-use std::time::Duration;
-
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::bb8::Pool;
 use diesel_async::{AsyncConnection, AsyncMigrationHarness, AsyncPgConnection};
@@ -33,9 +31,9 @@ pub async fn create_pool(
 
     Pool::builder()
         .max_size(config.max_connections)
-        .connection_timeout(Duration::from_secs(config.acquire_timeout))
-        .idle_timeout(Some(Duration::from_secs(config.idle_timeout)))
-        .max_lifetime(Some(Duration::from_secs(config.max_lifetime)))
+        .connection_timeout(config.acquire_timeout)
+        .idle_timeout(Some(config.idle_timeout))
+        .max_lifetime(Some(config.max_lifetime))
         .build(manager)
         .await
 }
