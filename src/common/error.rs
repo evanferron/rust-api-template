@@ -16,7 +16,7 @@
 //!
 //! ## Ajouter un code d'erreur
 //!
-//! Une seule ligne dans [`error_codes!`] : `NomDuCode => (STATUT_HTTP, "Message par défaut"),`
+//! Une seule ligne dans `error_codes!` (plus bas) : `NomDuCode => (STATUT_HTTP, "Message par défaut"),`
 //! Le code JSON (`NOM_DU_CODE`), le statut et la doc OpenAPI en découlent.
 //!
 //! ## Utilisation
