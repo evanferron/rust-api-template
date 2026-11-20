@@ -1,9 +1,10 @@
 # =============================================================================
 # Stage 1 — Chef
 # =============================================================================
-FROM rust:1.94-slim-bookworm AS chef
+# Version de Rust : >= rust-version du Cargo.toml (MSRV)
+FROM rust:1.100-slim-bookworm AS chef
 
-RUN cargo install cargo-chef
+RUN cargo install cargo-chef --locked
 
 WORKDIR /app
 
@@ -21,10 +22,10 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM chef AS builder
 
 COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
+RUN cargo chef cook --release --locked --recipe-path recipe.json
 
 COPY . .
-RUN cargo build --release --bin server
+RUN cargo build --release --locked --bin server
 
 # =============================================================================
 # Stage 4 — Runtime
@@ -47,11 +48,15 @@ USER appuser
 
 ENV SERVER_HOST=0.0.0.0
 ENV SERVER_PORT=8080
+ENV ENVIRONMENT=production
 ENV RUST_LOG=info
 
 EXPOSE 8080
 
+# Liveness uniquement : la readiness (/api/health/ready) est pour l'orchestrateur / le load balancer
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8080/api/health/live || exit 1
 
+# SIGTERM déclenche l'arrêt propre (requêtes en cours terminées, SHUTDOWN_TIMEOUT_SECS max)
+STOPSIGNAL SIGTERM
 CMD ["/app/server"]

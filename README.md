@@ -26,22 +26,30 @@ Template API REST production-ready — Axum 0.8 · Diesel 2 async · PostgreSQL 
 git clone https://github.com/<ton-org>/rust-api-template
 cd rust-api-template
 
-# 2. Lancer PostgreSQL
-docker-compose up -d
+# 2. Lancer PostgreSQL (dev sur 5432, tests sur 5433)
+docker compose up -d
 
-# 3. Configurer l'environnement
+# 3. Configurer l'environnement (toutes les variables sont documentées dans .env.example)
 cp .env.example .env
-# Éditer .env avec tes valeurs
 
-# 4. Lancer les migrations
-diesel migration run
-
-# 5. Démarrer le serveur
+# 4. Démarrer le serveur (les migrations sont appliquées au démarrage)
 cargo run
 
 # API disponible sur http://localhost:8080
 # Swagger UI sur http://localhost:8080/swagger-ui
 ```
+
+Tout en conteneur (API comprise) : `docker compose --profile app up --build`.
+
+### Exploitation
+
+| Sujet | Comportement |
+|-------|--------------|
+| Sondes | `GET /api/health/live` (process) · `GET /api/health/ready` (base joignable, 503 pendant l'arrêt) |
+| Arrêt | `SIGTERM` / Ctrl+C : plus de nouvelles connexions, requêtes en cours terminées (max `SHUTDOWN_TIMEOUT_SECS`) |
+| Logs | `ENVIRONMENT=production` → JSON, une ligne par requête avec `request_id` · niveau via `RUST_LOG` |
+| Erreurs | format RFC 9457 (`application/problem+json`) avec un `code` stable · catalogue dans `src/common/error.rs` |
+| Reverse proxy | `TRUST_PROXY=true` pour lire l'IP client dans `X-Forwarded-For` (rate limit) |
 
 ---
 
@@ -87,7 +95,7 @@ flowchart TD
     %% ───────────── app/ ─────────────
     subgraph APP["app/ — assemblage et démarrage (importé seulement par main et tests)"]
         direction TB
-        server["<b>server.rs</b><br/>logs → migrations → pool<br/>→ AppState → écoute HTTP"]
+        server["<b>server.rs</b><br/>logs → migrations → pool<br/>→ AppState → écoute HTTP<br/>arrêt propre (SIGTERM / Ctrl+C)"]
         appmod["<b>mod.rs</b><br/>api_router : merge des modules sous /api<br/>build_app : layers, fallbacks, Swagger"]
         openapi["<b>openapi.rs</b><br/>infos générales, tags, schéma Bearer"]
         telemetry["<b>telemetry.rs</b><br/>logs pretty en dev, JSON en prod"]
@@ -113,7 +121,7 @@ flowchart TD
         extract["<b>extract.rs</b><br/>AuthUser · ValidatedJson/Query/Path · UuidParam"]
         jwt["<b>jwt.rs</b><br/>Claims · create/verify token · bearer_token"]
         pagination["<b>pagination.rs</b><br/>PaginationQuery · PaginationParams · PaginatedResponse"]
-        state["<b>state.rs</b><br/>AppState : pool, config, rate limiters"]
+        state["<b>state.rs</b><br/>AppState : pool, config,<br/>rate limiters, shutting_down"]
         mw["<b>middlewares/</b><br/>rate_limit (global + AuthRateLimit) · request_id"]
         extract --> jwt
         extract --> state
