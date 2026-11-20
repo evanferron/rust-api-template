@@ -57,7 +57,7 @@ Tout en conteneur (API comprise) : `docker compose --profile app up --build`.
 |-----------|-------------|
 | Framework | Axum 0.8 |
 | ORM | Diesel 2.4 + diesel-async 0.10 |
-| Base de données | PostgreSQL 16 |
+| Base de données | PostgreSQL 18 |
 | Auth | JWT HS256 + refresh token (cookie HttpOnly) |
 | Validation | validator 0.21 |
 | Doc API | utoipa + Swagger UI |
@@ -241,7 +241,7 @@ JWT_REFRESH_SECRET=<générer avec openssl rand -base64 64>
 | Workflow | Déclencheur | Contrôle | Bloquant |
 |----------|-------------|----------|----------|
 | `ci.yml` — Format & Clippy | chaque push / PR | `cargo fmt --check` · `cargo clippy --all-targets -- -D warnings` | oui |
-| `ci.yml` — Tests & Coverage | chaque push / PR | tous les tests sur PostgreSQL 16 + couverture (`cargo llvm-cov`) → SonarCloud | oui |
+| `ci.yml` — Tests & Coverage | chaque push / PR | tous les tests sur PostgreSQL 18 + couverture (`cargo llvm-cov`) → SonarCloud | oui |
 | `security-audit.yml` | quotidien · modification de `Cargo.toml` / `Cargo.lock` · manuel | `cargo audit` (base RustSec) | non |
 
 L'audit est séparé de la CI pour qu'une vulnérabilité découverte dans une dépendance n'empêche pas de livrer un hotfix : le workflow passe au rouge (notification GitHub) et la correction arrive par une PR Dependabot. Ne pas le déclarer comme *required status check*.
