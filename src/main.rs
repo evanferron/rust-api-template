@@ -4,6 +4,12 @@ use dotenvy::dotenv;
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
-    let config = Config::from_env();
+    let config = match Config::from_env() {
+        Ok(config) => config,
+        Err(err) => {
+            eprintln!("{err}");
+            std::process::exit(1);
+        }
+    };
     Server::new(config).run().await
 }

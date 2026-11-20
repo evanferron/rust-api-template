@@ -46,7 +46,7 @@ pub async fn reset_db() {
 
 pub fn test_config() -> Config {
     dotenvy::dotenv().ok();
-    Config::from_env()
+    Config::from_env().expect("invalid test configuration")
 }
 
 // ---------------------------------------------------------------------------

@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::bb8::Pool;
-use serde::Deserialize;
 
 use crate::core::middlewares::rate_limit::RateLimitStore;
 use crate::infra::config::Config;
@@ -11,14 +10,14 @@ use crate::infra::config::Config;
 // Config structs
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Clone)]
 pub struct ServerConfig {
     pub host: String,
     pub port: u16,
     pub environment: String,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Clone)]
 pub struct DatabaseConfig {
     pub url: String,
     pub max_connections: u32,
@@ -27,7 +26,7 @@ pub struct DatabaseConfig {
     pub max_lifetime: u64,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Clone)]
 pub struct JwtConfig {
     pub secret: String,
     pub expiration: u32,
