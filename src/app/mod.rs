@@ -90,7 +90,9 @@ fn cors(http: &HttpConfig) -> CorsLayer {
     CorsLayer::new()
         .allow_origin(http.cors_allowed_origins.clone())
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
-        .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION])
+        .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION, X_REQUEST_ID])
+        // En-têtes lisibles par un frontend sur une autre origine
+        .expose_headers([X_REQUEST_ID, header::RETRY_AFTER])
         .allow_credentials(true)
 }
 
