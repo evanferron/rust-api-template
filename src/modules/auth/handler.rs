@@ -6,9 +6,7 @@ use crate::common::error::{ApiError, ErrorCode, ErrorResponse};
 use crate::common::extract::ValidatedJson;
 use crate::common::middlewares::rate_limit::AuthRateLimit;
 use crate::common::state::AppState;
-use crate::modules::auth::dto::{
-    LoginRequest, LoginResponse, RefreshResponse, RegisterRequest, RegisterResponse,
-};
+use crate::modules::auth::dto::{LoginRequest, RegisterRequest, RegisterResponse, TokenResponse};
 use crate::modules::auth::service;
 
 // ---------------------------------------------------------------------------
@@ -46,7 +44,7 @@ pub async fn register(
     tag = "auth",
     request_body = LoginRequest,
     responses(
-        (status = 200, description = "Authentification réussie", body = LoginResponse),
+        (status = 200, description = "Authentification réussie", body = TokenResponse),
         (status = 422, description = "Données invalides (VALIDATION_FAILED)", body = ErrorResponse),
         (status = 401, description = "Identifiants incorrects",  body = ErrorResponse),
     )
@@ -77,7 +75,7 @@ pub async fn login(
         ("refresh_token" = String, Cookie, description = "Refresh token HttpOnly")
     ),
     responses(
-        (status = 200, description = "Token renouvelé",             body = RefreshResponse),
+        (status = 200, description = "Token renouvelé",             body = TokenResponse),
         (status = 401, description = "Refresh token absent ou invalide", body = ErrorResponse),
     )
 )]

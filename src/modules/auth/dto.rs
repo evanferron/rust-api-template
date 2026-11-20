@@ -84,22 +84,17 @@ pub struct LoginRequest {
     pub password: String,
 }
 
+// ---------------------------------------------------------------------------
+// Tokens (réponse de login et de refresh)
+// ---------------------------------------------------------------------------
+
+/// Access token renvoyé par login et refresh. Le refresh token est posé dans un cookie HttpOnly.
 #[derive(Serialize, ToSchema)]
-pub struct LoginResponse {
+pub struct TokenResponse {
     pub access_token: String,
     /// Durée de vie de l'access token en secondes
     pub expires_in: u32,
-    pub token_type: String,
-}
-
-// ---------------------------------------------------------------------------
-// Refresh
-// ---------------------------------------------------------------------------
-
-#[derive(Serialize, ToSchema)]
-pub struct RefreshResponse {
-    pub access_token: String,
-    pub expires_in: u32,
+    /// Toujours `Bearer`
     pub token_type: String,
 }
 
