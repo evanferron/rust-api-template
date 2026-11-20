@@ -273,3 +273,14 @@ async fn then_response_has_new_access_token(world: &mut AuthWorld) {
         "Nouvel access_token manquant ou vide dans la réponse"
     );
 }
+
+#[then(expr = "la réponse signale une erreur sur le champ {string}")]
+async fn then_field_error(world: &mut AuthWorld, field: String) {
+    let messages = world.body["errors"][&field]
+        .as_array()
+        .unwrap_or_else(|| panic!("Aucune erreur pour le champ \"{field}\" : {}", world.body));
+    assert!(
+        !messages.is_empty(),
+        "Liste d'erreurs vide pour \"{field}\""
+    );
+}

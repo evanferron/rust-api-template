@@ -1,17 +1,17 @@
 use std::net::IpAddr;
 use std::num::NonZeroU32;
 use std::sync::Arc;
-use std::time::Duration;
 
 use axum::{
     extract::{ConnectInfo, Request, State},
     middleware::Next,
     response::Response,
 };
-use governor::{Quota, RateLimiter, clock::DefaultClock, state::keyed::DefaultKeyedStateStore};
+use governor::clock::{Clock, DefaultClock};
+use governor::{NotUntil, Quota, RateLimiter, state::keyed::DefaultKeyedStateStore};
 use std::net::SocketAddr;
 
-use crate::core::errors::ApiError;
+use crate::core::errors::{ApiError, ErrorCode};
 use crate::infra::state::AppState;
 use crate::modules::auth::helpers::Claims;
 
@@ -64,13 +64,9 @@ pub async fn rate_limit_by_ip(
         .map(|c| c.0.ip())
         .unwrap_or_else(|| std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST));
 
-    state.rate_limit.by_ip.check_key(&ip).map_err(|_| {
+    state.rate_limit.by_ip.check_key(&ip).map_err(|not_until| {
         tracing::warn!(ip = %ip, "Rate limit exceeded (IP)");
-        ApiError::RateLimitExceeded {
-            client_id: ip.to_string(),
-            max_requests: 0, // valeur symbolique, la vraie est dans le Quota
-            window_duration: Duration::from_secs(60),
-        }
+        rate_limited(not_until)
     })?;
 
     Ok(next.run(req).await)
@@ -93,16 +89,23 @@ pub async fn rate_limit_by_user(
         .extensions()
         .get::<Claims>()
         .map(|c| c.sub.to_string())
-        .ok_or_else(|| ApiError::Authentication("Missing claims".to_string()))?;
+        .ok_or_else(|| ApiError::internal("rate_limit_by_user must run after require_auth"))?;
 
-    state.rate_limit.by_user.check_key(&user_id).map_err(|_| {
-        tracing::warn!(user_id = %user_id, "Rate limit exceeded (user)");
-        ApiError::RateLimitExceeded {
-            client_id: user_id.clone(),
-            max_requests: 0,
-            window_duration: Duration::from_secs(60),
-        }
-    })?;
+    state
+        .rate_limit
+        .by_user
+        .check_key(&user_id)
+        .map_err(|not_until| {
+            tracing::warn!(user_id = %user_id, "Rate limit exceeded (user)");
+            rate_limited(not_until)
+        })?;
 
     Ok(next.run(req).await)
+}
+
+/// Erreur `RATE_LIMITED` avec l'en-tête `Retry-After` (secondes, arrondi au supérieur).
+fn rate_limited(not_until: NotUntil<<DefaultClock as Clock>::Instant>) -> ApiError {
+    let wait = not_until.wait_time_from(DefaultClock::default().now());
+    let seconds = wait.as_secs() + u64::from(wait.subsec_nanos() > 0);
+    ApiError::new(ErrorCode::RateLimited).with_retry_after(seconds.max(1))
 }

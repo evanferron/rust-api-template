@@ -2,7 +2,7 @@ use diesel::ExpressionMethods;
 use diesel_async::AsyncPgConnection;
 use uuid::Uuid;
 
-use crate::core::errors::ApiError;
+use crate::core::errors::{ApiError, ErrorCode};
 use crate::core::repository::prelude::*;
 use crate::db::post::model::{NewPost, Post, PostChangeset};
 use crate::db::post::repository::PostRepository;
@@ -76,12 +76,12 @@ pub async fn delete(conn: &mut AsyncPgConnection, id: Uuid, user_id: Uuid) -> Re
 async fn find_existing(conn: &mut AsyncPgConnection, id: Uuid) -> Result<Post, ApiError> {
     PostRepository::find_by_id(conn, id)
         .await?
-        .ok_or_else(|| ApiError::NotFound(format!("Post '{}' not found", id)))
+        .ok_or(ErrorCode::PostNotFound.into())
 }
 
 fn ensure_owner(post: &Post, user_id: Uuid, message: &str) -> Result<(), ApiError> {
     if post.user_id != user_id {
-        return Err(ApiError::Authorization(message.to_string()));
+        return Err(ApiError::new(ErrorCode::Forbidden).with_detail(message));
     }
     Ok(())
 }

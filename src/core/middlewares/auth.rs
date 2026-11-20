@@ -5,7 +5,7 @@ use axum::{
     response::Response,
 };
 
-use crate::core::errors::ApiError;
+use crate::core::errors::{ApiError, ErrorCode};
 use crate::infra::state::AppState;
 use crate::modules::auth::helpers::verify_token;
 
@@ -28,20 +28,19 @@ pub async fn require_auth(
     let token = match auth_header {
         Some(h) if h.starts_with("Bearer ") => &h[7..],
         Some(_) => {
-            return Err(ApiError::Authentication(
-                "Invalid Authorization header format, expected 'Bearer <token>'".to_string(),
-            ));
+            return Err(ApiError::new(ErrorCode::Unauthorized)
+                .with_detail("Invalid Authorization header format, expected 'Bearer <token>'"));
         }
         None => {
-            return Err(ApiError::Authentication(
-                "Missing Authorization header".to_string(),
-            ));
+            return Err(
+                ApiError::new(ErrorCode::Unauthorized).with_detail("Missing Authorization header")
+            );
         }
     };
 
     // --- Validation du token ---
-    let claims = verify_token(token, &state.config.jwt.secret)
-        .map_err(|e| ApiError::Authentication(e.to_string()))?;
+    // TOKEN_EXPIRED ou INVALID_TOKEN
+    let claims = verify_token(token, &state.config.jwt.secret)?;
 
     // --- Injection des claims dans les extensions ---
     // Accessible dans les handlers via Extension<Claims>

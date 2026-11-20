@@ -28,7 +28,10 @@ Feature: Auth
             | password   | securepass   |
             | first_name | Evan         |
             | last_name  | Ferron       |
-        Then le statut de la réponse est 400
+        Then le statut de la réponse est 422
+        And la réponse contient:
+            | code | VALIDATION_FAILED |
+        And la réponse signale une erreur sur le champ "email"
 
     Scenario: Register fails with password too short
         When je m'enregistre avec:
@@ -36,7 +39,10 @@ Feature: Auth
             | password   | short          |
             | first_name | Evan           |
             | last_name  | Ferron         |
-        Then le statut de la réponse est 400
+        Then le statut de la réponse est 422
+        And la réponse contient:
+            | code | VALIDATION_FAILED |
+        And la réponse signale une erreur sur le champ "password"
 
     Scenario: Register fails with duplicate email
         When je m'enregistre avec:
@@ -50,6 +56,8 @@ Feature: Auth
             | first_name | Evan               |
             | last_name  | Ferron             |
         Then le statut de la réponse est 409
+        And la réponse contient:
+            | code | EMAIL_ALREADY_USED |
 
 
     # ============================================================================
@@ -74,12 +82,16 @@ Feature: Auth
             | email    | user@test.com |
             | password | wrongpass     |
         Then le statut de la réponse est 401
+        And la réponse contient:
+            | code | INVALID_CREDENTIALS |
 
     Scenario: Login fails with unknown email
         When je me connecte avec:
             | email    | ghost@test.com |
             | password | anypass        |
         Then le statut de la réponse est 401
+        And la réponse contient:
+            | code | INVALID_CREDENTIALS |
 
 
     # ============================================================================
@@ -97,4 +109,6 @@ Feature: Auth
     Scenario: Refresh token fails without refresh cookie
         When j'appelle l'endpoint refresh sans cookie
         Then le statut de la réponse est 401
+        And la réponse contient:
+            | code | UNAUTHORIZED |
 

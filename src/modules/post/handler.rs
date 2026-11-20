@@ -25,7 +25,7 @@ pub async fn get_all(
     Extension(claims): Extension<Claims>,
     ValidatedQuery(pagination): ValidatedQuery<PaginationQuery>,
 ) -> Result<Json<PaginatedResponse<PostResponse>>, ApiError> {
-    let mut conn = state.pool.get().await.map_err(ApiError::from)?;
+    let mut conn = state.pool.get().await?;
     let params = PaginationParams::from(pagination);
     Ok(Json(
         service::get_all_by_user(&mut conn, claims.sub, params).await?,
@@ -47,7 +47,7 @@ pub async fn get_by_id(
     Extension(_claims): Extension<Claims>,
     ValidatedPath(params): ValidatedPath<UuidParam>,
 ) -> Result<Json<PostResponse>, ApiError> {
-    let mut conn = state.pool.get().await.map_err(ApiError::from)?;
+    let mut conn = state.pool.get().await?;
     Ok(Json(service::get_by_id(&mut conn, params.id).await?))
 }
 
@@ -66,7 +66,7 @@ pub async fn create(
     Extension(claims): Extension<Claims>,
     ValidatedJson(payload): ValidatedJson<CreatePostRequest>,
 ) -> Result<(StatusCode, Json<PostResponse>), ApiError> {
-    let mut conn = state.pool.get().await.map_err(ApiError::from)?;
+    let mut conn = state.pool.get().await?;
     let post = service::create(&mut conn, claims.sub, payload).await?;
     Ok((StatusCode::CREATED, Json(post)))
 }
@@ -90,7 +90,7 @@ pub async fn update(
     ValidatedPath(params): ValidatedPath<UuidParam>,
     ValidatedJson(payload): ValidatedJson<UpdatePostRequest>,
 ) -> Result<Json<PostResponse>, ApiError> {
-    let mut conn = state.pool.get().await.map_err(ApiError::from)?;
+    let mut conn = state.pool.get().await?;
     Ok(Json(
         service::update(&mut conn, params.id, claims.sub, payload).await?,
     ))
@@ -112,7 +112,7 @@ pub async fn delete(
     Extension(claims): Extension<Claims>,
     ValidatedPath(params): ValidatedPath<UuidParam>,
 ) -> Result<StatusCode, ApiError> {
-    let mut conn = state.pool.get().await.map_err(ApiError::from)?;
+    let mut conn = state.pool.get().await?;
     service::delete(&mut conn, params.id, claims.sub).await?;
     Ok(StatusCode::NO_CONTENT)
 }

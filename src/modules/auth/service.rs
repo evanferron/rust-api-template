@@ -1,7 +1,7 @@
 use diesel_async::AsyncPgConnection;
 use uuid::Uuid;
 
-use crate::core::errors::ApiError;
+use crate::core::errors::{ApiError, ErrorCode};
 use crate::db::user::model::NewUser;
 use crate::db::user::repository::UserRepository;
 use crate::infra::config::Config;
@@ -21,10 +21,7 @@ pub async fn register(
         .await?
         .is_some()
     {
-        return Err(ApiError::Conflict(format!(
-            "Email '{}' is already in use",
-            payload.email
-        )));
+        return Err(ErrorCode::EmailAlreadyUsed.into());
     }
 
     let hashed_password = hash_password(&payload.password).await?;
@@ -52,9 +49,11 @@ pub async fn login(
 ) -> Result<(LoginResponse, String), ApiError> {
     let user = UserRepository::find_by_email(conn, &payload.email)
         .await?
-        .ok_or_else(|| ApiError::Authentication("Invalid email or password".to_string()))?;
+        .ok_or(ErrorCode::InvalidCredentials)?;
 
-    verify_password(&payload.password, &user.password).await?;
+    if !verify_password(&payload.password, &user.password).await? {
+        return Err(ErrorCode::InvalidCredentials.into());
+    }
 
     let access_token = create_token(user.id, &config.jwt.secret, config.jwt.expiration)?;
     let refresh_token = create_refresh_token(

@@ -497,3 +497,14 @@ async fn then_post_not_accessible(world: &mut PostsWorld) {
         "Le post devrait retourner 404 après suppression"
     );
 }
+
+#[then(expr = "la réponse signale une erreur sur le champ {string}")]
+async fn then_field_error(world: &mut PostsWorld, field: String) {
+    let messages = world.body["errors"][&field]
+        .as_array()
+        .unwrap_or_else(|| panic!("Aucune erreur pour le champ \"{field}\" : {}", world.body));
+    assert!(
+        !messages.is_empty(),
+        "Liste d'erreurs vide pour \"{field}\""
+    );
+}

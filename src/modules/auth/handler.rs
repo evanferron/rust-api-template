@@ -2,7 +2,7 @@ use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use time::Duration;
 
-use crate::core::errors::{ApiError, ErrorResponse};
+use crate::core::errors::{ApiError, ErrorCode, ErrorResponse};
 use crate::core::validator::ValidatedJson;
 use crate::infra::state::AppState;
 use crate::modules::auth::dto::{LoginRequest, LoginResponse, RefreshResponse, RegisterRequest};
@@ -28,7 +28,7 @@ pub async fn register(
     State(state): State<AppState>,
     ValidatedJson(payload): ValidatedJson<RegisterRequest>,
 ) -> Result<(StatusCode, Json<UserResponse>), ApiError> {
-    let mut conn = state.pool.get().await.map_err(ApiError::from)?;
+    let mut conn = state.pool.get().await?;
     let user = service::register(&mut conn, payload).await?;
     Ok((StatusCode::CREATED, Json(user)))
 }
@@ -53,7 +53,7 @@ pub async fn login(
     jar: CookieJar,
     ValidatedJson(payload): ValidatedJson<LoginRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let mut conn = state.pool.get().await.map_err(ApiError::from)?;
+    let mut conn = state.pool.get().await?;
     let (response, refresh_token) = service::login(&mut conn, &state.config, payload).await?;
 
     let cookie = Cookie::build(("refresh_token", refresh_token))
@@ -92,7 +92,9 @@ pub async fn refresh(
     let refresh_token = jar
         .get("refresh_token")
         .map(|c| c.value().to_string())
-        .ok_or_else(|| ApiError::Authentication("Missing refresh token".to_string()))?;
+        .ok_or_else(|| {
+            ApiError::new(ErrorCode::Unauthorized).with_detail("Missing refresh token")
+        })?;
 
     let (response, new_refresh_token) = service::refresh(&state.config, &refresh_token)?;
 

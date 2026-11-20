@@ -18,6 +18,8 @@ Feature: Users
     Scenario: Lister les utilisateurs sans authentification échoue
         When je liste les utilisateurs sans token
         Then le statut de la réponse est 401
+        And la réponse contient:
+            | code | UNAUTHORIZED |
 
 
     # ============================================================================
@@ -35,6 +37,8 @@ Feature: Users
         Given je suis connecté en tant que "user@test.com" avec le mot de passe "securepass"
         When je récupère l'utilisateur avec l'id "00000000-0000-0000-0000-000000000000"
         Then le statut de la réponse est 404
+        And la réponse contient:
+            | code | USER_NOT_FOUND |
 
 
     # ============================================================================
@@ -55,6 +59,8 @@ Feature: Users
         When je modifie le profil de "user_a@test.com" avec:
             | first_name | Hacked |
         Then le statut de la réponse est 403
+        And la réponse contient:
+            | code | FORBIDDEN |
 
 
     # ============================================================================
@@ -71,3 +77,5 @@ Feature: Users
         And je suis connecté en tant que "attacker@test.com" avec le mot de passe "securepass"
         When je supprime le compte de "victim@test.com"
         Then le statut de la réponse est 403
+        And la réponse contient:
+            | code | FORBIDDEN |

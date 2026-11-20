@@ -1,25 +1,26 @@
 pub mod router;
 mod swagger;
 
+use crate::core::errors;
 use crate::core::logger;
 use crate::core::middlewares::rate_limit::RateLimitStore;
+use crate::core::middlewares::request_id::{X_REQUEST_ID, request_id};
 use crate::infra::config::Config;
 use crate::infra::database;
 use crate::infra::state::AppState;
 use crate::launch::router::create_router;
-use axum::BoxError;
 use axum::Router;
 use axum::error_handling::HandleErrorLayer;
-use axum::extract::MatchedPath;
-use axum::http::{HeaderValue, StatusCode};
+use axum::extract::{DefaultBodyLimit, MatchedPath};
+use axum::http::HeaderValue;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tower::ServiceBuilder;
 use tower::timeout::TimeoutLayer;
+use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::compression::CompressionLayer;
 use tower_http::cors::CorsLayer;
-use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::trace::{DefaultOnFailure, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
@@ -106,12 +107,18 @@ impl Server {
                     .get::<MatchedPath>()
                     .map(|p| p.as_str())
                     .unwrap_or(request.uri().path());
+                let request_id = request
+                    .headers()
+                    .get(X_REQUEST_ID)
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or_default();
 
                 tracing::info_span!(
                     "http_request",
-                    method  = %request.method(),
-                    path    = %matched_path,
-                    version = ?request.version(),
+                    method     = %request.method(),
+                    path       = %matched_path,
+                    version    = ?request.version(),
+                    request_id = %request_id,
                 )
             })
             .on_request(())
@@ -132,18 +139,22 @@ impl Server {
                 },
             ))
             .nest("/api", create_router(app_state))
+            // Routes et méthodes inconnues → 404 / 405 au format JSON
+            .fallback(errors::route_not_found)
+            .method_not_allowed_fallback(errors::method_not_allowed)
+            // Couches appliquées de la plus interne (haut) à la plus externe (bas)
+            .layer(DefaultBodyLimit::max(1024 * 1024)) // 1 MB → PAYLOAD_TOO_LARGE
             .layer(cors)
-            .layer(trace_layer)
+            .layer(CompressionLayer::new())
             .layer(
-                // Timeout global de 30s pour toutes les requêtes, avec gestion d'erreur personnalisée
+                // Timeout global de 30s → REQUEST_TIMEOUT
                 ServiceBuilder::new()
-                    .layer(HandleErrorLayer::new(|_: BoxError| async {
-                        StatusCode::REQUEST_TIMEOUT
-                    }))
+                    .layer(HandleErrorLayer::new(errors::handle_layer_error))
                     .layer(TimeoutLayer::new(Duration::from_secs(30))),
             )
-            .layer(RequestBodyLimitLayer::new(1024 * 1024)) // Limit de payload à 1MB pour éviter les abus
-            .layer(CompressionLayer::new()); // Compression des réponses pour économiser la bande passante
+            .layer(CatchPanicLayer::custom(errors::handle_panic)) // panic → INTERNAL
+            .layer(trace_layer)
+            .layer(axum::middleware::from_fn(request_id)); // la plus externe : tout est tracé avec un id
 
         // --- Lancement ---
         let addr = format!("{}:{}", config.server.host, config.server.port);

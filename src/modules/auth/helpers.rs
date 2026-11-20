@@ -3,7 +3,7 @@ use jsonwebtoken::{DecodingKey, EncodingKey, Header, TokenData, Validation, deco
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::core::errors::ApiError;
+use crate::core::errors::{ApiError, ErrorCode};
 
 // ---------------------------------------------------------------------------
 // Claims
@@ -37,14 +37,12 @@ fn validation() -> Validation {
 
 /// Clé de signature HMAC. Échoue si le secret est vide.
 fn encoding_key(secret: &str) -> Result<EncodingKey, ApiError> {
-    EncodingKey::from_secret(secret.as_bytes())
-        .map_err(|e| ApiError::InternalServer(format!("Invalid JWT secret: {}", e)))
+    EncodingKey::from_secret(secret.as_bytes()).map_err(ApiError::internal)
 }
 
 /// Clé de vérification HMAC. Échoue si le secret est vide.
 fn decoding_key(secret: &str) -> Result<DecodingKey, ApiError> {
-    DecodingKey::from_secret(secret.as_bytes())
-        .map_err(|e| ApiError::InternalServer(format!("Invalid JWT secret: {}", e)))
+    DecodingKey::from_secret(secret.as_bytes()).map_err(ApiError::internal)
 }
 
 // ---------------------------------------------------------------------------
@@ -70,25 +68,25 @@ pub fn create_token(user_id: Uuid, secret: &str, expiration: u32) -> Result<Stri
         &claims,
         &encoding_key(secret)?,
     )
-    .map_err(|e| ApiError::InternalServer(format!("Failed to create token: {}", e)))
+    .map_err(ApiError::internal)
 }
 
 /// Vérifie et décode un access token JWT.
-/// Retourne les `Claims` si le token est valide et non expiré.
+/// Erreurs : `TOKEN_EXPIRED`, `INVALID_TOKEN`.
 pub fn verify_token(token: &str, secret: &str) -> Result<Claims, ApiError> {
-    let token_data: TokenData<Claims> = decode(token, &decoding_key(secret)?, &validation())
-        .map_err(|e| match e.kind() {
-            jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
-                ApiError::Authentication("Token has expired".to_string())
-            }
-            jsonwebtoken::errors::ErrorKind::InvalidToken
-            | jsonwebtoken::errors::ErrorKind::InvalidSignature => {
-                ApiError::Authentication("Invalid token".to_string())
-            }
-            _ => ApiError::Authentication(format!("Token validation failed: {}", e)),
-        })?;
+    decode_claims(token, secret)
+}
 
-    Ok(token_data.claims)
+/// Décode et vérifie un token (signature + expiration).
+fn decode_claims(token: &str, secret: &str) -> Result<Claims, ApiError> {
+    use jsonwebtoken::errors::ErrorKind;
+
+    decode::<Claims>(token, &decoding_key(secret)?, &validation())
+        .map(|data: TokenData<Claims>| data.claims)
+        .map_err(|e| match e.kind() {
+            ErrorKind::ExpiredSignature => ApiError::new(ErrorCode::TokenExpired),
+            _ => ApiError::new(ErrorCode::InvalidToken).with_source(e),
+        })
 }
 
 // ---------------------------------------------------------------------------
@@ -109,50 +107,37 @@ pub fn create_refresh_token(
         exp: (now + Duration::seconds(expiration as i64)).timestamp(),
     };
 
-    encode(&Header::default(), &claims, &encoding_key(secret)?)
-        .map_err(|e| ApiError::InternalServer(format!("Failed to create refresh token: {}", e)))
+    encode(&Header::default(), &claims, &encoding_key(secret)?).map_err(ApiError::internal)
 }
 
 /// Vérifie et décode un refresh token JWT.
+/// Erreurs : `TOKEN_EXPIRED`, `INVALID_TOKEN`.
 pub fn verify_refresh_token(token: &str, secret: &str) -> Result<Claims, ApiError> {
-    let token_data: TokenData<Claims> = decode(token, &decoding_key(secret)?, &validation())
-        .map_err(|e| match e.kind() {
-            jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
-                ApiError::Authentication("Refresh token has expired".to_string())
-            }
-            jsonwebtoken::errors::ErrorKind::InvalidToken
-            | jsonwebtoken::errors::ErrorKind::InvalidSignature => {
-                ApiError::Authentication("Invalid refresh token".to_string())
-            }
-            _ => ApiError::Authentication(format!("Refresh token validation failed: {}", e)),
-        })?;
-
-    Ok(token_data.claims)
+    decode_claims(token, secret)
 }
+
+// ---------------------------------------------------------------------------
+// Mots de passe (bcrypt, exécuté hors du runtime async)
+// ---------------------------------------------------------------------------
 
 pub async fn hash_password(password: &str) -> Result<String, ApiError> {
     let password = password.to_string();
     let cost = if cfg!(debug_assertions) { 4 } else { 12 };
     tokio::task::spawn_blocking(move || bcrypt::hash(&password, cost))
         .await
-        .map_err(|e| ApiError::InternalServer(e.to_string()))?
-        .map_err(|e| ApiError::InternalServer(format!("Failed to hash password: {}", e)))
+        .map_err(ApiError::internal)?
+        .map_err(ApiError::internal)
 }
 
-pub async fn verify_password(password: &str, hash: &str) -> Result<(), ApiError> {
+/// Retourne `true` si `password` correspond au `hash`.
+/// L'appelant choisit l'erreur à renvoyer (`INVALID_CREDENTIALS`, `INVALID_CURRENT_PASSWORD`…).
+pub async fn verify_password(password: &str, hash: &str) -> Result<bool, ApiError> {
     let password = password.to_string();
     let hash = hash.to_string();
-    let valid = tokio::task::spawn_blocking(move || bcrypt::verify(&password, &hash))
+    tokio::task::spawn_blocking(move || bcrypt::verify(&password, &hash))
         .await
-        .map_err(|e| ApiError::InternalServer(e.to_string()))?
-        .map_err(|e| ApiError::InternalServer(format!("Failed to verify password: {}", e)))?;
-
-    if !valid {
-        return Err(ApiError::Authentication(
-            "Invalid email or password".to_string(),
-        ));
-    }
-    Ok(())
+        .map_err(ApiError::internal)?
+        .map_err(ApiError::internal)
 }
 
 #[cfg(test)]
@@ -193,6 +178,6 @@ mod tests {
         .unwrap();
 
         let err = verify_token(&token, "secret").unwrap_err();
-        assert!(matches!(err, ApiError::Authentication(_)));
+        assert_eq!(err.code(), ErrorCode::TokenExpired);
     }
 }
