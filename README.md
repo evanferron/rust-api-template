@@ -306,13 +306,13 @@ Les tests appliquent eux-mêmes les migrations et utilisent le même router que 
 
 | Workflow | Déclencheur | Contrôle | Bloquant |
 |----------|-------------|----------|----------|
-| `ci.yml` — Format & Clippy | chaque push / PR | `cargo fmt --check` · `cargo clippy --all-targets -- -D warnings` | oui |
-| `ci.yml` — Tests & Coverage | chaque push / PR | tous les tests sur PostgreSQL 18 + couverture (`cargo llvm-cov`) → SonarCloud | oui |
-| `ci.yml` — MSRV | chaque push / PR | `cargo check` avec la version minimale de Rust (`rust-version` du `Cargo.toml`) | oui |
-| `ci.yml` — Docker build | chaque push / PR | construction de l'image (sans push) | oui |
-| `security-audit.yml` | quotidien · modification de `Cargo.toml` / `Cargo.lock` · manuel | `cargo audit` (base RustSec) | non |
+| `ci.yml` — Format & Clippy | push sur `main` · PR | `cargo fmt --check` · `cargo clippy --all-targets -- -D warnings` | oui |
+| `ci.yml` — Tests & Coverage | push sur `main` · PR | tous les tests sur PostgreSQL 18 + couverture (`cargo llvm-cov`) → SonarCloud | oui |
+| `ci.yml` — MSRV | push sur `main` · PR | `cargo check` avec la version minimale de Rust (`rust-version` du `Cargo.toml`) | oui |
+| `ci.yml` — Docker build | push sur `main` · PR | construction de l'image (sans push) | oui |
+| `security-audit.yml` | quotidien · modification de `Cargo.toml` / `Cargo.lock` (push sur `main`, PR) · manuel | `cargo audit` (base RustSec) | non |
 
-Un seul run par branche : le push et la pull request d'une même branche partagent un groupe de concurrence.
+La CI tourne sur chaque pull request et sur `main` : une branche avec une PR ouverte n'est testée qu'une fois.
 
 L'audit est séparé de la CI pour qu'une vulnérabilité découverte dans une dépendance n'empêche pas de livrer
 un hotfix : le workflow passe au rouge (notification GitHub) et la correction arrive par une PR Dependabot.

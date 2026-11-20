@@ -3,15 +3,19 @@ name: CI
 # Contrôle qualité bloquant : format, lint, tests, MSRV, build Docker.
 # L'audit des dépendances est dans security-audit.yml (non bloquant pour pouvoir livrer un hotfix).
 
+# push sur main + pull requests : une branche avec une PR ouverte n'est testée qu'une fois.
 on:
   push:
+    branches: [main]
   pull_request:
 
-# Un seul run par branche : le push et la pull request d'une même branche partagent
-# le groupe, le plus récent annule l'autre (évite de tout exécuter deux fois).
+# Un nouveau commit sur une PR annule le run précédent de cette PR ; les runs de main vont au bout
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always

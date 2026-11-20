@@ -12,6 +12,7 @@ on:
   schedule:
     - cron: "0 5 * * *" # tous les jours (UTC) : détecte les nouvelles failles sans changement de code
   push:
+    branches: [main]
     paths:
       - Cargo.toml
       - Cargo.lock
@@ -21,9 +22,8 @@ on:
       - Cargo.lock
   workflow_dispatch:
 
-# Un seul run par branche (push et pull request d'une même branche partagent le groupe)
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
