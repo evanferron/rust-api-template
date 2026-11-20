@@ -242,6 +242,7 @@ JWT_REFRESH_SECRET=<générer avec openssl rand -base64 64>
 |----------|-------------|----------|----------|
 | `ci.yml` — Format & Clippy | chaque push / PR | `cargo fmt --check` · `cargo clippy --all-targets -- -D warnings` | oui |
 | `ci.yml` — Tests & Coverage | chaque push / PR | tous les tests sur PostgreSQL 18 + couverture (`cargo llvm-cov`) → SonarCloud | oui |
+| `ci.yml` — MSRV | chaque push / PR | `cargo check` avec la version minimale de Rust (`rust-version` du `Cargo.toml`) | oui |
 | `security-audit.yml` | quotidien · modification de `Cargo.toml` / `Cargo.lock` · manuel | `cargo audit` (base RustSec) | non |
 
 L'audit est séparé de la CI pour qu'une vulnérabilité découverte dans une dépendance n'empêche pas de livrer un hotfix : le workflow passe au rouge (notification GitHub) et la correction arrive par une PR Dependabot. Ne pas le déclarer comme *required status check*.

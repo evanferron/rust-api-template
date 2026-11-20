@@ -1,6 +1,6 @@
 name: CI
 
-# Contrôle qualité bloquant : format, lint, tests.
+# Contrôle qualité bloquant : format, lint, tests, MSRV.
 # L'audit des dépendances est dans security-audit.yml (non bloquant pour pouvoir livrer un hotfix).
 
 on:
@@ -89,3 +89,25 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Version minimale de Rust (rust-version du Cargo.toml)
+  # ---------------------------------------------------------------------------
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Read rust-version from Cargo.toml
+        id: msrv
+        run: echo "version=$(sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo check (MSRV ${{ steps.msrv.outputs.version }})
+        run: cargo check --all-targets --locked
