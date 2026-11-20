@@ -1,6 +1,6 @@
 use crate::core::errors::{ApiError, ErrorResponse};
 use crate::core::params::{PaginationQuery, UuidParam};
-use crate::core::repository::PaginationParams;
+use crate::core::repository::{PaginatedResponse, PaginationParams};
 use crate::core::validator::{ValidatedJson, ValidatedPath, ValidatedQuery};
 use crate::infra::state::AppState;
 use crate::modules::auth::helpers::Claims;
@@ -16,7 +16,7 @@ use axum::{Extension, Json, extract::State, http::StatusCode};
         ("per_page" = Option<i64>, Query, description = "Éléments par page (défaut: 20, max: 100)"),
     ),
     responses(
-        (status = 200, body = Vec<PostResponse>),
+        (status = 200, body = PaginatedResponse<PostResponse>),
         (status = 401, body = ErrorResponse),
     )
 )]
@@ -24,12 +24,9 @@ pub async fn get_all(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
     ValidatedQuery(pagination): ValidatedQuery<PaginationQuery>,
-) -> Result<Json<Vec<PostResponse>>, ApiError> {
-    let params = PaginationParams::new(
-        pagination.page.unwrap_or(1),
-        pagination.per_page.unwrap_or(20),
-    );
+) -> Result<Json<PaginatedResponse<PostResponse>>, ApiError> {
     let mut conn = state.pool.get().await.map_err(ApiError::from)?;
+    let params = PaginationParams::from(pagination);
     Ok(Json(
         service::get_all_by_user(&mut conn, claims.sub, params).await?,
     ))

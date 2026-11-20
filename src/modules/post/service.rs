@@ -1,26 +1,28 @@
+use diesel::ExpressionMethods;
 use diesel_async::AsyncPgConnection;
 use uuid::Uuid;
 
 use crate::core::errors::ApiError;
-use crate::core::repository::PaginationParams;
-use crate::db::post::model::{NewPost, PostChangeset};
+use crate::core::repository::prelude::*;
+use crate::db::post::model::{NewPost, Post, PostChangeset};
 use crate::db::post::repository::PostRepository;
+use crate::db::schema::posts;
 use crate::modules::post::dto::{CreatePostRequest, PostResponse, UpdatePostRequest};
 
+/// Posts de l'utilisateur, paginés du plus récent au plus ancien.
 pub async fn get_all_by_user(
     conn: &mut AsyncPgConnection,
     user_id: Uuid,
     params: PaginationParams,
-) -> Result<Vec<PostResponse>, ApiError> {
-    let posts = PostRepository::find_paginated_by_user(conn, user_id, params).await?;
-    Ok(posts.into_iter().map(PostResponse::from).collect())
+) -> Result<PaginatedResponse<PostResponse>, ApiError> {
+    let page =
+        PostRepository::find_paginated_by(conn, params, || Box::new(posts::user_id.eq(user_id)))
+            .await?;
+    Ok(page.map(PostResponse::from))
 }
 
 pub async fn get_by_id(conn: &mut AsyncPgConnection, id: Uuid) -> Result<PostResponse, ApiError> {
-    PostRepository::find_by_id(conn, id)
-        .await?
-        .ok_or_else(|| ApiError::NotFound(format!("Post '{}' not found", id)))
-        .map(PostResponse::from)
+    find_existing(conn, id).await.map(PostResponse::from)
 }
 
 pub async fn create(
@@ -46,16 +48,8 @@ pub async fn update(
     user_id: Uuid,
     payload: UpdatePostRequest,
 ) -> Result<PostResponse, ApiError> {
-    // Vérifie que le post existe et appartient à l'utilisateur
-    let post = PostRepository::find_by_id(conn, id)
-        .await?
-        .ok_or_else(|| ApiError::NotFound(format!("Post '{}' not found", id)))?;
-
-    if post.user_id != user_id {
-        return Err(ApiError::Authorization(
-            "You can only update your own posts".to_string(),
-        ));
-    }
+    let post = find_existing(conn, id).await?;
+    ensure_owner(&post, user_id, "You can only update your own posts")?;
 
     let changeset = PostChangeset {
         title: payload.title,
@@ -68,17 +62,26 @@ pub async fn update(
 }
 
 pub async fn delete(conn: &mut AsyncPgConnection, id: Uuid, user_id: Uuid) -> Result<(), ApiError> {
-    // Vérifie que le post appartient à l'utilisateur avant de supprimer
-    let post = PostRepository::find_by_id(conn, id)
-        .await?
-        .ok_or_else(|| ApiError::NotFound(format!("Post '{}' not found", id)))?;
-
-    if post.user_id != user_id {
-        return Err(ApiError::Authorization(
-            "You can only delete your own posts".to_string(),
-        ));
-    }
+    let post = find_existing(conn, id).await?;
+    ensure_owner(&post, user_id, "You can only delete your own posts")?;
 
     PostRepository::delete(conn, id).await?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+async fn find_existing(conn: &mut AsyncPgConnection, id: Uuid) -> Result<Post, ApiError> {
+    PostRepository::find_by_id(conn, id)
+        .await?
+        .ok_or_else(|| ApiError::NotFound(format!("Post '{}' not found", id)))
+}
+
+fn ensure_owner(post: &Post, user_id: Uuid, message: &str) -> Result<(), ApiError> {
+    if post.user_id != user_id {
+        return Err(ApiError::Authorization(message.to_string()));
+    }
     Ok(())
 }

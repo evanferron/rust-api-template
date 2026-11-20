@@ -1,64 +1,180 @@
 //! # Repository générique
 //!
-//! Ce module fournit un ensemble de macros pour générer automatiquement
-//! les méthodes courantes sur les repositories Diesel.
+//! Chaque capacité générique est un **trait** distinct, implémenté par une **macro** dédiée.
+//! Un repository n'implémente que les capacités dont il a besoin : aucune méthode
+//! n'est générée « dans le vide ».
 //!
-//! ## Utilisation rapide
+//! ## Utilisation
 //!
-//! ```rust
-//! // Méthodes fondamentales — find_all, find_by_id, delete
-//! impl_base_repository!(PostRepository, Post, crate::db::schema::posts, Uuid);
+//! ```rust,ignore
+//! use crate::core::repository::prelude::*;
 //!
-//! // Méthodes optionnelles à la carte
-//! impl_exists!(PostRepository, crate::db::schema::posts, Uuid);
-//! impl_count!(PostRepository, crate::db::schema::posts);
-//! impl_find_paginated!(PostRepository, Post, crate::db::schema::posts, created_at);
+//! pub struct PostRepository;
 //!
-//! // Soft delete — nécessite une colonne deleted_at TIMESTAMP NULL
-//! impl_soft_delete!(PostRepository, Post, crate::db::schema::posts, Uuid);
+//! // Socle CRUD (FindAll + FindById + Delete) → BaseRepository automatiquement
+//! crate::impl_base_repository!(PostRepository, Post, crate::db::schema::posts, Uuid);
+//!
+//! // Capacités à la carte
+//! crate::impl_paginate!(PostRepository, Post, crate::db::schema::posts, created_at);
+//! crate::impl_count!(PostRepository, crate::db::schema::posts);
+//!
+//! // Appel (le trait doit être dans le scope → importer le prelude)
+//! let post = PostRepository::find_by_id(conn, id).await?;
 //! ```
 //!
-//! ## Tableau des macros
+//! ## Capacités disponibles
 //!
-//! | Macro | Méthodes générées | Prérequis |
-//! |-------|-------------------|-----------|
-//! | [`impl_base_repository!`] | `find_all`, `find_by_id`, `delete` | — |
-//! | [`impl_find_all!`] | `find_all` | — |
-//! | [`impl_find_by_id!`] | `find_by_id` | — |
-//! | [`impl_delete!`] | `delete` | — |
-//! | [`impl_exists!`] | `exists` | — |
-//! | [`impl_count!`] | `count` | — |
-//! | [`impl_find_paginated!`] | `find_paginated` | colonne de tri |
-//! | [`impl_soft_delete!`] | `soft_delete`, `find_active`, `restore` | `deleted_at` |
+//! | Trait | Macro | Méthodes | Prérequis |
+//! |-------|-------|----------|-----------|
+//! | [`FindAll`] | [`impl_find_all!`] | `find_all` | — |
+//! | [`FindById`] | [`impl_find_by_id!`] | `find_by_id` | — |
+//! | [`Delete`] | [`impl_delete!`] | `delete` | — |
+//! | [`Exists`] | [`impl_exists!`] | `exists` | — |
+//! | [`Count`] | [`impl_count!`] | `count` | — |
+//! | [`Paginate`] | [`impl_paginate!`] | `find_paginated`, `find_paginated_by` | colonne de tri, clé primaire simple |
+//! | [`SoftDelete`] | [`impl_soft_delete!`] | `soft_delete`, `find_active`, `restore` | colonne `deleted_at TIMESTAMP NULL` |
+//! | [`BaseRepository`] | [`impl_base_repository!`] | `FindAll` + `FindById` + `Delete` | — |
+//!
+//! `BaseRepository` est un supertrait implémenté automatiquement pour tout type
+//! qui implémente `FindAll`, `FindById` et `Delete`.
+//!
+//! Les méthodes spécifiques à une entité (recherche par email, jointures…) s'écrivent
+//! dans un bloc `impl` classique à côté des macros.
 
-use async_trait::async_trait;
+use std::future::Future;
+
+use diesel::expression::BoxableExpression;
+use diesel::pg::Pg;
+use diesel::sql_types::Bool;
 use diesel_async::AsyncPgConnection;
+use serde::Serialize;
+use utoipa::ToSchema;
 
 use crate::core::errors::ApiError;
+use crate::core::params::PaginationQuery;
 
 /// Macros disponibles pour les repositories.
 pub use crate::{
     impl_base_repository, impl_count, impl_delete, impl_exists, impl_find_all, impl_find_by_id,
-    impl_find_paginated, impl_soft_delete,
+    impl_paginate, impl_soft_delete,
 };
 
+/// Imports nécessaires pour appeler les méthodes génériques d'un repository.
+///
+/// ```rust,ignore
+/// use crate::core::repository::prelude::*;
+/// ```
+pub mod prelude {
+    pub use super::{
+        BaseRepository, Count, Delete, Exists, Filter, FindAll, FindById, Paginate,
+        PaginatedResponse, PaginationParams, SoftDelete,
+    };
+}
+
 // ---------------------------------------------------------------------------
-// Trait de base
+// Traits — une capacité par trait
 // ---------------------------------------------------------------------------
 
-#[async_trait]
-pub trait BaseRepository<T, Id> {
-    async fn find_all(conn: &mut AsyncPgConnection) -> Result<Vec<T>, ApiError>;
-    async fn find_by_id(conn: &mut AsyncPgConnection, id: Id) -> Result<Option<T>, ApiError>;
-    async fn delete(conn: &mut AsyncPgConnection, id: Id) -> Result<bool, ApiError>;
+/// `SELECT * FROM table`
+pub trait FindAll<M> {
+    fn find_all(
+        conn: &mut AsyncPgConnection,
+    ) -> impl Future<Output = Result<Vec<M>, ApiError>> + Send;
 }
+
+/// `SELECT * FROM table WHERE pk = ?` → `None` si absent.
+pub trait FindById<M, Id> {
+    fn find_by_id(
+        conn: &mut AsyncPgConnection,
+        id: Id,
+    ) -> impl Future<Output = Result<Option<M>, ApiError>> + Send;
+}
+
+/// `DELETE FROM table WHERE pk = ?` → `true` si une ligne a été supprimée.
+pub trait Delete<Id> {
+    fn delete(
+        conn: &mut AsyncPgConnection,
+        id: Id,
+    ) -> impl Future<Output = Result<bool, ApiError>> + Send;
+}
+
+/// `SELECT EXISTS(SELECT 1 FROM table WHERE pk = ?)`
+pub trait Exists<Id> {
+    fn exists(
+        conn: &mut AsyncPgConnection,
+        id: Id,
+    ) -> impl Future<Output = Result<bool, ApiError>> + Send;
+}
+
+/// `SELECT COUNT(*) FROM table`
+pub trait Count {
+    fn count(conn: &mut AsyncPgConnection) -> impl Future<Output = Result<i64, ApiError>> + Send;
+}
+
+/// Filtre dynamique applicable à une table, utilisé par [`Paginate::find_paginated_by`].
+///
+/// ```rust,ignore
+/// let filter = || -> Filter<posts::table> { Box::new(posts::user_id.eq(user_id)) };
+/// ```
+pub type Filter<T> = Box<dyn BoxableExpression<T, Pg, SqlType = Bool>>;
+
+/// Pagination triée par ordre décroissant sur une colonne (puis sur la clé primaire
+/// pour garantir un ordre stable entre les pages).
+pub trait Paginate<M> {
+    /// Table Diesel ciblée (ex: `posts::table`).
+    type Table;
+
+    /// Page sur toute la table.
+    fn find_paginated(
+        conn: &mut AsyncPgConnection,
+        params: PaginationParams,
+    ) -> impl Future<Output = Result<PaginatedResponse<M>, ApiError>> + Send;
+
+    /// Page filtrée. `filter` est appelé deux fois (COUNT puis SELECT),
+    /// c'est pourquoi il s'agit d'une closure et non d'une expression.
+    fn find_paginated_by<F>(
+        conn: &mut AsyncPgConnection,
+        params: PaginationParams,
+        filter: F,
+    ) -> impl Future<Output = Result<PaginatedResponse<M>, ApiError>> + Send
+    where
+        F: Fn() -> Filter<Self::Table> + Send;
+}
+
+/// Suppression logique via une colonne `deleted_at TIMESTAMP NULL`.
+pub trait SoftDelete<M, Id> {
+    /// `deleted_at = NOW()` → `true` si une ligne a été modifiée.
+    fn soft_delete(
+        conn: &mut AsyncPgConnection,
+        id: Id,
+    ) -> impl Future<Output = Result<bool, ApiError>> + Send;
+
+    /// Lignes où `deleted_at IS NULL`.
+    fn find_active(
+        conn: &mut AsyncPgConnection,
+    ) -> impl Future<Output = Result<Vec<M>, ApiError>> + Send;
+
+    /// `deleted_at = NULL` → `true` si une ligne a été modifiée.
+    fn restore(
+        conn: &mut AsyncPgConnection,
+        id: Id,
+    ) -> impl Future<Output = Result<bool, ApiError>> + Send;
+}
+
+/// Socle CRUD : implémenté automatiquement pour tout repository qui implémente
+/// [`FindAll`], [`FindById`] et [`Delete`] (voir [`impl_base_repository!`]).
+///
+/// Utile comme borne générique : `fn foo<R: BaseRepository<M, Id>>()`.
+pub trait BaseRepository<M, Id>: FindAll<M> + FindById<M, Id> + Delete<Id> {}
+
+impl<R, M, Id> BaseRepository<M, Id> for R where R: FindAll<M> + FindById<M, Id> + Delete<Id> {}
 
 // ---------------------------------------------------------------------------
 // Pagination
 // ---------------------------------------------------------------------------
 
-/// Paramètres de pagination passés aux méthodes `find_paginated`.
-#[derive(Debug, Clone)]
+/// Paramètres de pagination normalisés (page ≥ 1, 1 ≤ per_page ≤ 100).
+#[derive(Debug, Clone, Copy)]
 pub struct PaginationParams {
     /// Numéro de page (commence à 1)
     pub page: i64,
@@ -67,10 +183,14 @@ pub struct PaginationParams {
 }
 
 impl PaginationParams {
+    pub const DEFAULT_PAGE: i64 = 1;
+    pub const DEFAULT_PER_PAGE: i64 = 20;
+    pub const MAX_PER_PAGE: i64 = 100;
+
     pub fn new(page: i64, per_page: i64) -> Self {
         Self {
             page: page.max(1),
-            per_page: per_page.clamp(1, 100),
+            per_page: per_page.clamp(1, Self::MAX_PER_PAGE),
         }
     }
 
@@ -79,8 +199,17 @@ impl PaginationParams {
     }
 }
 
+impl From<PaginationQuery> for PaginationParams {
+    fn from(query: PaginationQuery) -> Self {
+        Self::new(
+            query.page.unwrap_or(Self::DEFAULT_PAGE),
+            query.per_page.unwrap_or(Self::DEFAULT_PER_PAGE),
+        )
+    }
+}
+
 /// Réponse paginée avec métadonnées.
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct PaginatedResponse<T> {
     pub data: Vec<T>,
     pub total: i64,
@@ -91,27 +220,34 @@ pub struct PaginatedResponse<T> {
 
 impl<T> PaginatedResponse<T> {
     pub fn new(data: Vec<T>, total: i64, params: &PaginationParams) -> Self {
-        let total_pages = (total as f64 / params.per_page as f64).ceil() as i64;
         Self {
             data,
             total,
             page: params.page,
             per_page: params.per_page,
-            total_pages,
+            total_pages: (total + params.per_page - 1) / params.per_page,
+        }
+    }
+
+    /// Convertit les éléments (ex: modèle Diesel → DTO) en conservant les métadonnées.
+    pub fn map<U>(self, f: impl FnMut(T) -> U) -> PaginatedResponse<U> {
+        PaginatedResponse {
+            data: self.data.into_iter().map(f).collect(),
+            total: self.total,
+            page: self.page,
+            per_page: self.per_page,
+            total_pages: self.total_pages,
         }
     }
 }
 
 // ---------------------------------------------------------------------------
-// Macro composite — impl_base_repository!
-// Sucre syntaxique qui appelle impl_find_all! + impl_find_by_id! + impl_delete!
+// Macros
 // ---------------------------------------------------------------------------
 
-/// Génère les 3 méthodes fondamentales : `find_all`, `find_by_id`, `delete`.
-/// Équivalent d'appeler les 3 macros séparément.
+/// Implémente [`FindAll`], [`FindById`] et [`Delete`] — donc [`BaseRepository`].
 ///
-/// # Exemple
-/// ```rust
+/// ```rust,ignore
 /// impl_base_repository!(PostRepository, Post, crate::db::schema::posts, Uuid);
 /// ```
 #[macro_export]
@@ -120,48 +256,19 @@ macro_rules! impl_base_repository {
         $crate::impl_find_all!($repo, $model, $table);
         $crate::impl_find_by_id!($repo, $model, $table, $id_type);
         $crate::impl_delete!($repo, $table, $id_type);
-
-        #[async_trait::async_trait]
-        impl $crate::core::repository::BaseRepository<$model, $id_type> for $repo {
-            async fn find_all(
-                conn: &mut diesel_async::AsyncPgConnection,
-            ) -> Result<Vec<$model>, $crate::core::errors::ApiError> {
-                <$repo>::find_all(conn).await
-            }
-
-            async fn find_by_id(
-                conn: &mut diesel_async::AsyncPgConnection,
-                id: $id_type,
-            ) -> Result<Option<$model>, $crate::core::errors::ApiError> {
-                <$repo>::find_by_id(conn, id).await
-            }
-
-            async fn delete(
-                conn: &mut diesel_async::AsyncPgConnection,
-                id: $id_type,
-            ) -> Result<bool, $crate::core::errors::ApiError> {
-                <$repo>::delete(conn, id).await
-            }
-        }
     };
 }
 
-// ---------------------------------------------------------------------------
-// impl_find_all!
-// SELECT * FROM table
-// ---------------------------------------------------------------------------
-
-/// Génère la méthode `find_all` sur le repository.
+/// Implémente [`FindAll`].
 ///
-/// # Exemple
-/// ```rust
+/// ```rust,ignore
 /// impl_find_all!(PostRepository, Post, crate::db::schema::posts);
 /// ```
 #[macro_export]
 macro_rules! impl_find_all {
     ($repo:ty, $model:ty, $table:path) => {
-        impl $repo {
-            pub async fn find_all(
+        impl $crate::core::repository::FindAll<$model> for $repo {
+            async fn find_all(
                 conn: &mut diesel_async::AsyncPgConnection,
             ) -> Result<Vec<$model>, $crate::core::errors::ApiError> {
                 use diesel_async::RunQueryDsl;
@@ -176,22 +283,16 @@ macro_rules! impl_find_all {
     };
 }
 
-// ---------------------------------------------------------------------------
-// impl_find_by_id!
-// SELECT * FROM table WHERE id = ?
-// ---------------------------------------------------------------------------
-
-/// Génère la méthode `find_by_id` sur le repository.
+/// Implémente [`FindById`].
 ///
-/// # Exemple
-/// ```rust
+/// ```rust,ignore
 /// impl_find_by_id!(PostRepository, Post, crate::db::schema::posts, Uuid);
 /// ```
 #[macro_export]
 macro_rules! impl_find_by_id {
     ($repo:ty, $model:ty, $table:path, $id_type:ty) => {
-        impl $repo {
-            pub async fn find_by_id(
+        impl $crate::core::repository::FindById<$model, $id_type> for $repo {
+            async fn find_by_id(
                 conn: &mut diesel_async::AsyncPgConnection,
                 id: $id_type,
             ) -> Result<Option<$model>, $crate::core::errors::ApiError> {
@@ -210,22 +311,16 @@ macro_rules! impl_find_by_id {
     };
 }
 
-// ---------------------------------------------------------------------------
-// impl_delete!
-// DELETE FROM table WHERE id = ? → bool (true si une ligne supprimée)
-// ---------------------------------------------------------------------------
-
-/// Génère la méthode `delete` sur le repository.
+/// Implémente [`Delete`].
 ///
-/// # Exemple
-/// ```rust
+/// ```rust,ignore
 /// impl_delete!(PostRepository, crate::db::schema::posts, Uuid);
 /// ```
 #[macro_export]
 macro_rules! impl_delete {
     ($repo:ty, $table:path, $id_type:ty) => {
-        impl $repo {
-            pub async fn delete(
+        impl $crate::core::repository::Delete<$id_type> for $repo {
+            async fn delete(
                 conn: &mut diesel_async::AsyncPgConnection,
                 id: $id_type,
             ) -> Result<bool, $crate::core::errors::ApiError> {
@@ -244,32 +339,24 @@ macro_rules! impl_delete {
     };
 }
 
-// ---------------------------------------------------------------------------
-// impl_exists!
-// SELECT EXISTS(SELECT 1 FROM table WHERE id = ?)
-// ---------------------------------------------------------------------------
-
-/// Génère la méthode `exists` sur le repository.
+/// Implémente [`Exists`].
 ///
-/// # Exemple
-/// ```rust
+/// ```rust,ignore
 /// impl_exists!(PostRepository, crate::db::schema::posts, Uuid);
 /// ```
 #[macro_export]
 macro_rules! impl_exists {
     ($repo:ty, $table:path, $id_type:ty) => {
-        impl $repo {
-            pub async fn exists(
+        impl $crate::core::repository::Exists<$id_type> for $repo {
+            async fn exists(
                 conn: &mut diesel_async::AsyncPgConnection,
                 id: $id_type,
             ) -> Result<bool, $crate::core::errors::ApiError> {
                 use diesel::QueryDsl;
-                use diesel::dsl::exists;
-                use diesel::select;
                 use diesel_async::RunQueryDsl;
                 use $table as _table;
 
-                select(exists(_table::table.find(id)))
+                diesel::select(diesel::dsl::exists(_table::table.find(id)))
                     .get_result::<bool>(conn)
                     .await
                     .map_err($crate::core::errors::ApiError::from)
@@ -278,22 +365,16 @@ macro_rules! impl_exists {
     };
 }
 
-// ---------------------------------------------------------------------------
-// impl_count!
-// SELECT COUNT(*) FROM table
-// ---------------------------------------------------------------------------
-
-/// Génère la méthode `count` sur le repository.
+/// Implémente [`Count`].
 ///
-/// # Exemple
-/// ```rust
+/// ```rust,ignore
 /// impl_count!(PostRepository, crate::db::schema::posts);
 /// ```
 #[macro_export]
 macro_rules! impl_count {
     ($repo:ty, $table:path) => {
-        impl $repo {
-            pub async fn count(
+        impl $crate::core::repository::Count for $repo {
+            async fn count(
                 conn: &mut diesel_async::AsyncPgConnection,
             ) -> Result<i64, $crate::core::errors::ApiError> {
                 use diesel::QueryDsl;
@@ -310,43 +391,77 @@ macro_rules! impl_count {
     };
 }
 
-// ---------------------------------------------------------------------------
-// impl_find_paginated!
-// SELECT * FROM table ORDER BY $order_col DESC LIMIT per_page OFFSET offset
-// ---------------------------------------------------------------------------
-
-/// Génère la méthode `find_paginated` sur le repository.
-/// Nécessite une colonne de tri explicite (typiquement `created_at`).
+/// Implémente [`Paginate`]. Tri décroissant sur `$order_col`, puis sur la clé primaire.
 ///
-/// # Exemple
-/// ```rust
-/// impl_find_paginated!(PostRepository, Post, crate::db::schema::posts, created_at);
+/// ```rust,ignore
+/// impl_paginate!(PostRepository, Post, crate::db::schema::posts, created_at);
+///
+/// // Appel filtré
+/// PostRepository::find_paginated_by(conn, params, || Box::new(posts::user_id.eq(user_id))).await?;
 /// ```
 #[macro_export]
-macro_rules! impl_find_paginated {
-    ($repo:ty, $model:ty, $table:path, $order_col:ident) => {
-        impl $repo {
-            pub async fn find_paginated(
+macro_rules! impl_paginate {
+    ($repo:ty, $model:ty, $($table:ident)::+, $order_col:ident) => {
+        impl $crate::core::repository::Paginate<$model> for $repo {
+            type Table = $($table)::+::table;
+
+            async fn find_paginated(
                 conn: &mut diesel_async::AsyncPgConnection,
                 params: $crate::core::repository::PaginationParams,
             ) -> Result<
                 $crate::core::repository::PaginatedResponse<$model>,
                 $crate::core::errors::ApiError,
             > {
-                use diesel::QueryDsl;
+                use diesel::{ExpressionMethods, QueryDsl, Table};
                 use diesel_async::RunQueryDsl;
-                use $table as _table;
+                use $($table)::+ as _table;
 
-                // COUNT pour les métadonnées de pagination
                 let total = _table::table
                     .count()
                     .get_result::<i64>(conn)
                     .await
                     .map_err($crate::core::errors::ApiError::from)?;
 
-                // Page de données triée et découpée
                 let data = _table::table
                     .order(_table::$order_col.desc())
+                    .then_order_by(_table::table.primary_key().desc())
+                    .limit(params.per_page)
+                    .offset(params.offset())
+                    .load::<$model>(conn)
+                    .await
+                    .map_err($crate::core::errors::ApiError::from)?;
+
+                Ok($crate::core::repository::PaginatedResponse::new(
+                    data, total, &params,
+                ))
+            }
+
+            async fn find_paginated_by<F>(
+                conn: &mut diesel_async::AsyncPgConnection,
+                params: $crate::core::repository::PaginationParams,
+                filter: F,
+            ) -> Result<
+                $crate::core::repository::PaginatedResponse<$model>,
+                $crate::core::errors::ApiError,
+            >
+            where
+                F: Fn() -> $crate::core::repository::Filter<Self::Table> + Send,
+            {
+                use diesel::{ExpressionMethods, QueryDsl, Table};
+                use diesel_async::RunQueryDsl;
+                use $($table)::+ as _table;
+
+                let total = _table::table
+                    .filter(filter())
+                    .count()
+                    .get_result::<i64>(conn)
+                    .await
+                    .map_err($crate::core::errors::ApiError::from)?;
+
+                let data = _table::table
+                    .filter(filter())
+                    .order(_table::$order_col.desc())
+                    .then_order_by(_table::table.primary_key().desc())
                     .limit(params.per_page)
                     .offset(params.offset())
                     .load::<$model>(conn)
@@ -361,30 +476,16 @@ macro_rules! impl_find_paginated {
     };
 }
 
-// ---------------------------------------------------------------------------
-// impl_soft_delete!
-// UPDATE table SET deleted_at = NOW() WHERE id = ?
-// Prérequis : colonne `deleted_at TIMESTAMP NULL` sur la table
-// ---------------------------------------------------------------------------
-
-/// Génère les méthodes `soft_delete` et `find_active` sur le repository.
+/// Implémente [`SoftDelete`]. La table doit avoir une colonne `deleted_at TIMESTAMP NULL`.
 ///
-/// `soft_delete` marque la ligne comme supprimée sans la retirer physiquement.
-/// `find_active` retourne uniquement les lignes où `deleted_at IS NULL`.
-///
-/// Prérequis : la table doit avoir une colonne `deleted_at TIMESTAMP NULL`.
-///
-/// # Exemple
-/// ```rust
+/// ```rust,ignore
 /// impl_soft_delete!(PostRepository, Post, crate::db::schema::posts, Uuid);
 /// ```
 #[macro_export]
 macro_rules! impl_soft_delete {
     ($repo:ty, $model:ty, $table:path, $id_type:ty) => {
-        impl $repo {
-            /// Marque la ligne comme supprimée (deleted_at = NOW()).
-            /// La ligne reste en base et peut être restaurée.
-            pub async fn soft_delete(
+        impl $crate::core::repository::SoftDelete<$model, $id_type> for $repo {
+            async fn soft_delete(
                 conn: &mut diesel_async::AsyncPgConnection,
                 id: $id_type,
             ) -> Result<bool, $crate::core::errors::ApiError> {
@@ -393,7 +494,7 @@ macro_rules! impl_soft_delete {
                 use $table as _table;
 
                 let rows = diesel::update(_table::table.find(id))
-                    .set(_table::deleted_at.eq(Some(chrono::Utc::now().naive_utc())))
+                    .set(_table::deleted_at.eq(diesel::dsl::now.nullable()))
                     .execute(conn)
                     .await
                     .map_err($crate::core::errors::ApiError::from)?;
@@ -401,8 +502,7 @@ macro_rules! impl_soft_delete {
                 Ok(rows > 0)
             }
 
-            /// Retourne uniquement les lignes non supprimées (deleted_at IS NULL).
-            pub async fn find_active(
+            async fn find_active(
                 conn: &mut diesel_async::AsyncPgConnection,
             ) -> Result<Vec<$model>, $crate::core::errors::ApiError> {
                 use diesel::{ExpressionMethods, QueryDsl};
@@ -416,8 +516,7 @@ macro_rules! impl_soft_delete {
                     .map_err($crate::core::errors::ApiError::from)
             }
 
-            /// Restaure une ligne soft-supprimée (deleted_at = NULL).
-            pub async fn restore(
+            async fn restore(
                 conn: &mut diesel_async::AsyncPgConnection,
                 id: $id_type,
             ) -> Result<bool, $crate::core::errors::ApiError> {
@@ -437,150 +536,70 @@ macro_rules! impl_soft_delete {
     };
 }
 
-/// ──────────────────────────────────────────────────────────────────────────────
-/// Tests unitaires pour les macros de repository
-/// ──────────────────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// Tests unitaires — pagination (les macros sont testées dans tests/repository.rs)
+// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // ─── PaginationParams::new ───────────────────────────────────────────────
-
     #[test]
-    fn test_pagination_new_nominal() {
+    fn pagination_params_are_clamped() {
+        let p = PaginationParams::new(0, 500);
+        assert_eq!((p.page, p.per_page), (1, PaginationParams::MAX_PER_PAGE));
+
+        let p = PaginationParams::new(-5, -10);
+        assert_eq!((p.page, p.per_page), (1, 1));
+
         let p = PaginationParams::new(3, 20);
-        assert_eq!(p.page, 3);
-        assert_eq!(p.per_page, 20);
+        assert_eq!((p.page, p.per_page), (3, 20));
     }
 
     #[test]
-    fn test_pagination_page_zero_clamped_to_one() {
-        let p = PaginationParams::new(0, 20);
-        assert_eq!(p.page, 1);
+    fn pagination_offset() {
+        assert_eq!(PaginationParams::new(1, 20).offset(), 0);
+        assert_eq!(PaginationParams::new(3, 10).offset(), 20);
     }
 
     #[test]
-    fn test_pagination_negative_page_clamped_to_one() {
-        let p = PaginationParams::new(-5, 20);
-        assert_eq!(p.page, 1);
+    fn pagination_from_query_uses_defaults() {
+        let p = PaginationParams::from(PaginationQuery {
+            page: None,
+            per_page: None,
+        });
+        assert_eq!(p.page, PaginationParams::DEFAULT_PAGE);
+        assert_eq!(p.per_page, PaginationParams::DEFAULT_PER_PAGE);
     }
 
     #[test]
-    fn test_pagination_per_page_zero_clamped_to_one() {
-        let p = PaginationParams::new(1, 0);
-        assert_eq!(p.per_page, 1);
+    fn paginated_response_total_pages() {
+        let p = PaginationParams::new(1, 10);
+        assert_eq!(
+            PaginatedResponse::<i32>::new(vec![], 100, &p).total_pages,
+            10
+        );
+        assert_eq!(
+            PaginatedResponse::<i32>::new(vec![], 101, &p).total_pages,
+            11
+        );
+        assert_eq!(PaginatedResponse::<i32>::new(vec![], 3, &p).total_pages, 1);
+        assert_eq!(PaginatedResponse::<i32>::new(vec![], 0, &p).total_pages, 0);
     }
 
     #[test]
-    fn test_pagination_per_page_negative_clamped_to_one() {
-        let p = PaginationParams::new(1, -10);
-        assert_eq!(p.per_page, 1);
-    }
-
-    #[test]
-    fn test_pagination_per_page_above_max_clamped_to_100() {
-        let p = PaginationParams::new(1, 500);
-        assert_eq!(p.per_page, 100);
-    }
-
-    #[test]
-    fn test_pagination_per_page_at_max_boundary() {
-        let p = PaginationParams::new(1, 100);
-        assert_eq!(p.per_page, 100);
-    }
-
-    #[test]
-    fn test_pagination_per_page_at_min_boundary() {
-        let p = PaginationParams::new(1, 1);
-        assert_eq!(p.per_page, 1);
-    }
-
-    // ─── PaginationParams::offset ────────────────────────────────────────────
-
-    #[test]
-    fn test_offset_page_one_is_zero() {
-        let p = PaginationParams::new(1, 20);
-        assert_eq!(p.offset(), 0);
-    }
-
-    #[test]
-    fn test_offset_page_two() {
-        let p = PaginationParams::new(2, 20);
-        assert_eq!(p.offset(), 20);
-    }
-
-    #[test]
-    fn test_offset_page_three() {
-        let p = PaginationParams::new(3, 10);
-        assert_eq!(p.offset(), 20);
-    }
-
-    #[test]
-    fn test_offset_large_page() {
-        let p = PaginationParams::new(100, 50);
-        assert_eq!(p.offset(), 4950);
-    }
-
-    // ─── PaginatedResponse::new ──────────────────────────────────────────────
-
-    #[test]
-    fn test_paginated_response_total_pages_exact_division() {
-        // 100 items / 10 per page = 10 pages exactes
-        let params = PaginationParams::new(1, 10);
-        let resp = PaginatedResponse::new(vec![1, 2, 3], 100, &params);
-        assert_eq!(resp.total_pages, 10);
-        assert_eq!(resp.total, 100);
-        assert_eq!(resp.page, 1);
-        assert_eq!(resp.per_page, 10);
-    }
-
-    #[test]
-    fn test_paginated_response_total_pages_with_remainder() {
-        // 101 items / 10 per page = 11 pages (arrondi supérieur)
-        let params = PaginationParams::new(1, 10);
-        let resp = PaginatedResponse::new(vec![1i32; 10], 101, &params);
-        assert_eq!(resp.total_pages, 11);
-    }
-
-    #[test]
-    fn test_paginated_response_single_page() {
-        let params = PaginationParams::new(1, 20);
-        let resp = PaginatedResponse::new(vec!["a", "b", "c"], 3, &params);
-        assert_eq!(resp.total_pages, 1);
-        assert_eq!(resp.data.len(), 3);
-    }
-
-    #[test]
-    fn test_paginated_response_empty_result() {
-        let params = PaginationParams::new(1, 20);
-        let resp = PaginatedResponse::<String>::new(vec![], 0, &params);
-        assert_eq!(resp.total_pages, 0);
-        assert_eq!(resp.total, 0);
-        assert!(resp.data.is_empty());
-    }
-
-    #[test]
-    fn test_paginated_response_one_item_per_page() {
-        // 5 items / 1 per page = 5 pages
-        let params = PaginationParams::new(1, 1);
-        let resp = PaginatedResponse::new(vec![42], 5, &params);
-        assert_eq!(resp.total_pages, 5);
-    }
-
-    #[test]
-    fn test_paginated_response_preserves_current_page() {
-        let params = PaginationParams::new(4, 10);
-        let resp = PaginatedResponse::<i32>::new(vec![], 50, &params);
-        assert_eq!(resp.page, 4);
-        assert_eq!(resp.per_page, 10);
-    }
-
-    #[test]
-    fn test_paginated_response_per_page_larger_than_total() {
-        // 3 items / 20 per page = 1 page
-        let params = PaginationParams::new(1, 20);
-        let resp = PaginatedResponse::new(vec![1, 2, 3], 3, &params);
-        assert_eq!(resp.total_pages, 1);
+    fn paginated_response_map_keeps_metadata() {
+        let p = PaginationParams::new(2, 2);
+        let mapped = PaginatedResponse::new(vec![1, 2], 5, &p).map(|n| n.to_string());
+        assert_eq!(mapped.data, vec!["1", "2"]);
+        assert_eq!(
+            (
+                mapped.total,
+                mapped.page,
+                mapped.per_page,
+                mapped.total_pages
+            ),
+            (5, 2, 2, 3)
+        );
     }
 }

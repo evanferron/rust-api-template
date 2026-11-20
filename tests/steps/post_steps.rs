@@ -441,28 +441,25 @@ async fn then_no_password(world: &mut PostsWorld) {
 
 #[then("la réponse est une liste vide")]
 async fn then_empty_list(world: &mut PostsWorld) {
-    let arr = world
-        .body
+    let arr = world.body["data"]
         .as_array()
-        .expect("La réponse devrait être un tableau JSON");
+        .expect("La réponse devrait contenir un tableau `data` (réponse paginée)");
     assert_eq!(arr.len(), 0, "La liste devrait être vide");
 }
 
 #[then(expr = "la réponse contient exactement {int} posts")]
 async fn then_list_has_n_posts(world: &mut PostsWorld, expected: usize) {
-    let arr = world
-        .body
+    let arr = world.body["data"]
         .as_array()
-        .expect("La réponse devrait être un tableau JSON");
+        .expect("La réponse devrait contenir un tableau `data` (réponse paginée)");
     assert_eq!(arr.len(), expected, "Nombre de posts attendu : {expected}");
 }
 
 #[then(expr = "aucun post de la liste n'a le titre {string}")]
 async fn then_no_post_with_title(world: &mut PostsWorld, forbidden_title: String) {
-    let arr = world
-        .body
+    let arr = world.body["data"]
         .as_array()
-        .expect("La réponse devrait être un tableau JSON");
+        .expect("La réponse devrait contenir un tableau `data` (réponse paginée)");
     for post in arr {
         assert_ne!(
             post["title"].as_str().unwrap_or(""),

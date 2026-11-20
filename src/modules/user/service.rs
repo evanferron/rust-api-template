@@ -2,6 +2,7 @@ use diesel_async::AsyncPgConnection;
 use uuid::Uuid;
 
 use crate::core::errors::ApiError;
+use crate::core::repository::prelude::*;
 use crate::db::user::model::UserChangeset;
 use crate::db::user::repository::UserRepository;
 use crate::modules::auth::helpers::{hash_password, verify_password};
