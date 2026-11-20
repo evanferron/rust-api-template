@@ -36,13 +36,18 @@ Feature: Posts
         When je crée un post avec:
             | title   |                |
             | content | Contenu valide |
-        Then le statut de la réponse est 400
+        Then le statut de la réponse est 422
+        And la réponse contient:
+            | code | VALIDATION_FAILED |
+        And la réponse signale une erreur sur le champ "title"
 
     Scenario: Créer un post sans authentification échoue
         When je crée un post sans token avec:
             | title   | Post sans token |
             | content | Contenu         |
         Then le statut de la réponse est 401
+        And la réponse contient:
+            | code | UNAUTHORIZED |
 
 
     # ============================================================================
@@ -87,10 +92,35 @@ Feature: Posts
         And la réponse contient:
             | title | Mon post |
 
+    Scenario: Récupérer le post publié d'un autre utilisateur avec succès
+        Given je suis connecté en tant que "author@test.com" avec le mot de passe "securepass"
+        And j'ai créé un post avec:
+            | title     | Post public |
+            | content   | Contenu     |
+            | published | true        |
+        And je suis connecté en tant que "reader@test.com" avec le mot de passe "securepass"
+        When je récupère le post par son id
+        Then le statut de la réponse est 200
+        And la réponse contient:
+            | title | Post public |
+
+    Scenario: Le brouillon d'un autre utilisateur est introuvable
+        Given je suis connecté en tant que "author@test.com" avec le mot de passe "securepass"
+        And j'ai créé un post avec:
+            | title   | Brouillon |
+            | content | Contenu   |
+        And je suis connecté en tant que "reader@test.com" avec le mot de passe "securepass"
+        When je récupère le post par son id
+        Then le statut de la réponse est 404
+        And la réponse contient:
+            | code | POST_NOT_FOUND |
+
     Scenario: Récupérer un post inexistant retourne 404
         Given je suis connecté en tant que "author@test.com" avec le mot de passe "securepass"
         When je récupère le post avec l'id "00000000-0000-0000-0000-000000000000"
         Then le statut de la réponse est 404
+        And la réponse contient:
+            | code | POST_NOT_FOUND |
 
 
     # ============================================================================
@@ -120,12 +150,16 @@ Feature: Posts
         When je modifie le post avec:
             | title | Post hacké |
         Then le statut de la réponse est 403
+        And la réponse contient:
+            | code | FORBIDDEN |
 
     Scenario: Modifier un post inexistant retourne 404
         Given je suis connecté en tant que "author@test.com" avec le mot de passe "securepass"
         When je modifie le post "00000000-0000-0000-0000-000000000000" avec:
             | title | Peu importe |
         Then le statut de la réponse est 404
+        And la réponse contient:
+            | code | POST_NOT_FOUND |
 
 
     # ============================================================================
@@ -149,6 +183,8 @@ Feature: Posts
         And je suis connecté en tant que "hacker@test.com" avec le mot de passe "securepass"
         When je supprime le post
         Then le statut de la réponse est 403
+        And la réponse contient:
+            | code | FORBIDDEN |
 
 
     # ============================================================================
@@ -164,3 +200,5 @@ Feature: Posts
         And je suis connecté en tant que "other@test.com" avec le mot de passe "securepass"
         And je récupère le post par son id
         Then le statut de la réponse est 404
+        And la réponse contient:
+            | code | POST_NOT_FOUND |

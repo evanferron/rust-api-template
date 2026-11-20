@@ -1,15 +1,10 @@
 # =============================================================================
 # Stage 1 — Chef
 # =============================================================================
-FROM rust:1.94-slim-bookworm AS chef
+# Version de Rust : >= rust-version du Cargo.toml (MSRV)
+FROM rust:1.100-slim-bookworm AS chef
 
-RUN apt-get update && apt-get install -y \
-    libpq-dev \
-    pkg-config \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN cargo install cargo-chef
+RUN cargo install cargo-chef --locked
 
 WORKDIR /app
 
@@ -27,10 +22,10 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM chef AS builder
 
 COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
+RUN cargo chef cook --release --locked --recipe-path recipe.json
 
 COPY . .
-RUN cargo build --release --bin server
+RUN cargo build --release --locked --bin server
 
 # =============================================================================
 # Stage 4 — Runtime
@@ -38,7 +33,6 @@ RUN cargo build --release --bin server
 FROM debian:bookworm-slim AS runtime
 
 RUN apt-get update && apt-get install -y \
-    libpq5 \
     ca-certificates \
     curl \
     && rm -rf /var/lib/apt/lists/* \
@@ -46,19 +40,23 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
+# Les migrations sont embarquées dans le binaire (embed_migrations!)
 COPY --from=builder /app/target/release/server /app/server
-COPY --from=builder /app/migrations /app/migrations
 
 RUN chown -R appuser:appuser /app
 USER appuser
 
 ENV SERVER_HOST=0.0.0.0
 ENV SERVER_PORT=8080
+ENV ENVIRONMENT=production
 ENV RUST_LOG=info
 
 EXPOSE 8080
 
+# Liveness uniquement : la readiness (/api/health/ready) est pour l'orchestrateur / le load balancer
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8080/api/health || exit 1
+    CMD curl -f http://localhost:8080/api/health/live || exit 1
 
+# SIGTERM déclenche l'arrêt propre (requêtes en cours terminées, SHUTDOWN_TIMEOUT_SECS max)
+STOPSIGNAL SIGTERM
 CMD ["/app/server"]

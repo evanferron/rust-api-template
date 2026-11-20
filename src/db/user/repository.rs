@@ -2,21 +2,32 @@ use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper};
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
-use crate::core::errors::ApiError;
-use crate::db::schema::users::dsl;
+use crate::common::error::ApiError;
+use crate::db::schema::users;
 use crate::db::user::model::{NewUser, User, UserChangeset};
 
 pub struct UserRepository;
 
-crate::impl_base_repository!(UserRepository, User, crate::db::schema::users, Uuid);
+// ---------------------------------------------------------------------------
+// Capacités génériques (voir db::repository)
+// ---------------------------------------------------------------------------
+
+crate::impl_find_by_id!(UserRepository, User, crate::db::schema::users, Uuid);
+crate::impl_delete!(UserRepository, crate::db::schema::users, Uuid);
+crate::impl_exists!(UserRepository, crate::db::schema::users, Uuid);
+crate::impl_paginate!(UserRepository, User, crate::db::schema::users, created_at);
+
+// ---------------------------------------------------------------------------
+// Méthodes spécifiques à User
+// ---------------------------------------------------------------------------
 
 impl UserRepository {
     pub async fn find_by_email(
         conn: &mut AsyncPgConnection,
         email: &str,
     ) -> Result<Option<User>, ApiError> {
-        dsl::users
-            .filter(dsl::email.eq(email))
+        users::table
+            .filter(users::email.eq(email))
             .first::<User>(conn)
             .await
             .optional()
@@ -26,7 +37,7 @@ impl UserRepository {
     /// Insère un nouvel utilisateur.
     /// La construction de `NewUser` est à la charge du service.
     pub async fn create(conn: &mut AsyncPgConnection, new_user: NewUser) -> Result<User, ApiError> {
-        diesel::insert_into(dsl::users)
+        diesel::insert_into(users::table)
             .values(&new_user)
             .returning(User::as_returning())
             .get_result::<User>(conn)
@@ -41,7 +52,7 @@ impl UserRepository {
         id: Uuid,
         changeset: UserChangeset,
     ) -> Result<User, ApiError> {
-        diesel::update(dsl::users.find(id))
+        diesel::update(users::table.find(id))
             .set(&changeset)
             .returning(User::as_returning())
             .get_result::<User>(conn)

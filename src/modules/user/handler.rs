@@ -1,32 +1,33 @@
-use axum::{Extension, Json, extract::State, http::StatusCode};
+use axum::{Json, extract::State, http::StatusCode};
 
-use crate::core::{
-    errors::{ApiError, ErrorResponse},
-    validator::ValidatedPath,
-};
-use crate::core::{params::UuidParam, validator::ValidatedJson};
-use crate::modules::auth::helpers::Claims;
+use crate::common::error::{ApiError, ErrorResponse};
+use crate::common::extract::{AuthUser, UuidParam, ValidatedJson, ValidatedPath, ValidatedQuery};
+use crate::common::pagination::{PaginatedResponse, PaginationParams, PaginationQuery};
+use crate::common::state::AppState;
 use crate::modules::user::dto::{UpdateUserRequest, UserResponse};
-use crate::{infra::state::AppState, modules::user::service};
+use crate::modules::user::service;
 
 #[utoipa::path(
-    get, path = "/api/users", tag = "users",
+    get, path = "/users", tag = "users",
     security(("bearer_auth" = [])),
+    params(PaginationQuery),
     responses(
-        (status = 200, body = Vec<UserResponse>),
+        (status = 200, body = PaginatedResponse<UserResponse>),
         (status = 401, body = ErrorResponse),
     )
 )]
 pub async fn get_all(
     State(state): State<AppState>,
-    Extension(_claims): Extension<Claims>,
-) -> Result<Json<Vec<UserResponse>>, ApiError> {
-    let mut conn = state.pool.get().await.map_err(ApiError::from)?;
-    Ok(Json(service::get_all(&mut conn).await?))
+    _user: AuthUser,
+    ValidatedQuery(pagination): ValidatedQuery<PaginationQuery>,
+) -> Result<Json<PaginatedResponse<UserResponse>>, ApiError> {
+    let mut conn = state.pool.get().await?;
+    let params = PaginationParams::from(pagination);
+    Ok(Json(service::get_all(&mut conn, params).await?))
 }
 
 #[utoipa::path(
-    get, path = "/api/users/{id}", tag = "users",
+    get, path = "/users/{id}", tag = "users",
     security(("bearer_auth" = [])),
     params(("id" = Uuid, Path, description = "UUID de l'utilisateur")),
     responses(
@@ -37,43 +38,41 @@ pub async fn get_all(
 )]
 pub async fn get_by_id(
     State(state): State<AppState>,
-    Extension(_claims): Extension<Claims>,
+    _user: AuthUser,
     ValidatedPath(params): ValidatedPath<UuidParam>,
 ) -> Result<Json<UserResponse>, ApiError> {
-    let mut conn = state.pool.get().await.map_err(ApiError::from)?;
+    let mut conn = state.pool.get().await?;
     Ok(Json(service::get_by_id(&mut conn, params.id).await?))
 }
 
 #[utoipa::path(
-    put, path = "/api/users/{id}", tag = "users",
+    put, path = "/users/{id}", tag = "users",
     security(("bearer_auth" = [])),
     params(("id" = Uuid, Path, description = "UUID de l'utilisateur")),
     request_body = UpdateUserRequest,
     responses(
         (status = 200, body = UserResponse),
-        (status = 400, body = ErrorResponse),
+        (status = 422, description = "Données invalides (VALIDATION_FAILED)", body = ErrorResponse),
         (status = 401, body = ErrorResponse),
         (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
+        (status = 409, description = "Email déjà utilisé (EMAIL_ALREADY_USED)", body = ErrorResponse),
     )
 )]
 pub async fn update(
     State(state): State<AppState>,
-    Extension(claims): Extension<Claims>,
+    user: AuthUser,
     ValidatedPath(params): ValidatedPath<UuidParam>,
     ValidatedJson(payload): ValidatedJson<UpdateUserRequest>,
 ) -> Result<Json<UserResponse>, ApiError> {
-    if claims.sub != params.id {
-        return Err(ApiError::Authorization(
-            "You can only update your own profile".to_string(),
-        ));
-    }
-    let mut conn = state.pool.get().await.map_err(ApiError::from)?;
-    Ok(Json(service::update(&mut conn, params.id, payload).await?))
+    let mut conn = state.pool.get().await?;
+    Ok(Json(
+        service::update(&mut conn, user.id, params.id, payload).await?,
+    ))
 }
 
 #[utoipa::path(
-    delete, path = "/api/users/{id}", tag = "users",
+    delete, path = "/users/{id}", tag = "users",
     security(("bearer_auth" = [])),
     params(("id" = Uuid, Path, description = "UUID de l'utilisateur")),
     responses(
@@ -85,15 +84,10 @@ pub async fn update(
 )]
 pub async fn delete(
     State(state): State<AppState>,
-    Extension(claims): Extension<Claims>,
+    user: AuthUser,
     ValidatedPath(params): ValidatedPath<UuidParam>,
 ) -> Result<StatusCode, ApiError> {
-    if claims.sub != params.id {
-        return Err(ApiError::Authorization(
-            "You can only delete your own account".to_string(),
-        ));
-    }
-    let mut conn = state.pool.get().await.map_err(ApiError::from)?;
-    service::delete(&mut conn, params.id).await?;
+    let mut conn = state.pool.get().await?;
+    service::delete(&mut conn, user.id, params.id).await?;
     Ok(StatusCode::NO_CONTENT)
 }

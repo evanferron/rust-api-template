@@ -1,87 +1,82 @@
-use crate::core::errors::{ApiError, ErrorResponse};
-use crate::core::params::{PaginationQuery, UuidParam};
-use crate::core::repository::PaginationParams;
-use crate::core::validator::{ValidatedJson, ValidatedPath, ValidatedQuery};
-use crate::infra::state::AppState;
-use crate::modules::auth::helpers::Claims;
+use axum::{Json, extract::State, http::StatusCode};
+
+use crate::common::error::{ApiError, ErrorResponse};
+use crate::common::extract::{AuthUser, UuidParam, ValidatedJson, ValidatedPath, ValidatedQuery};
+use crate::common::pagination::{PaginatedResponse, PaginationParams, PaginationQuery};
+use crate::common::state::AppState;
 use crate::modules::post::dto::{CreatePostRequest, PostResponse, UpdatePostRequest};
 use crate::modules::post::service;
-use axum::{Extension, Json, extract::State, http::StatusCode};
 
 #[utoipa::path(
-    get, path = "/api/posts", tag = "posts",
+    get, path = "/posts", tag = "posts",
     security(("bearer_auth" = [])),
-    params(
-        ("page" = Option<i64>, Query, description = "Numéro de page (défaut: 1)"),
-        ("per_page" = Option<i64>, Query, description = "Éléments par page (défaut: 20, max: 100)"),
-    ),
+    params(PaginationQuery),
     responses(
-        (status = 200, body = Vec<PostResponse>),
+        (status = 200, body = PaginatedResponse<PostResponse>),
         (status = 401, body = ErrorResponse),
     )
 )]
 pub async fn get_all(
     State(state): State<AppState>,
-    Extension(claims): Extension<Claims>,
+    user: AuthUser,
     ValidatedQuery(pagination): ValidatedQuery<PaginationQuery>,
-) -> Result<Json<Vec<PostResponse>>, ApiError> {
-    let params = PaginationParams::new(
-        pagination.page.unwrap_or(1),
-        pagination.per_page.unwrap_or(20),
-    );
-    let mut conn = state.pool.get().await.map_err(ApiError::from)?;
+) -> Result<Json<PaginatedResponse<PostResponse>>, ApiError> {
+    let mut conn = state.pool.get().await?;
+    let params = PaginationParams::from(pagination);
     Ok(Json(
-        service::get_all_by_user(&mut conn, claims.sub, params).await?,
+        service::get_all_by_user(&mut conn, user.id, params).await?,
     ))
 }
 
 #[utoipa::path(
-    get, path = "/api/posts/{id}", tag = "posts",
+    get, path = "/posts/{id}", tag = "posts",
     security(("bearer_auth" = [])),
     params(("id" = Uuid, Path, description = "UUID du post")),
     responses(
         (status = 200, body = PostResponse),
         (status = 401, body = ErrorResponse),
-        (status = 404, body = ErrorResponse),
+        (status = 404, description = "Post inexistant, ou brouillon d'un autre utilisateur (POST_NOT_FOUND)", body = ErrorResponse),
     )
 )]
 pub async fn get_by_id(
     State(state): State<AppState>,
-    Extension(_claims): Extension<Claims>,
+    user: AuthUser,
     ValidatedPath(params): ValidatedPath<UuidParam>,
 ) -> Result<Json<PostResponse>, ApiError> {
-    let mut conn = state.pool.get().await.map_err(ApiError::from)?;
-    Ok(Json(service::get_by_id(&mut conn, params.id).await?))
+    let mut conn = state.pool.get().await?;
+    Ok(Json(
+        service::get_by_id(&mut conn, user.id, params.id).await?,
+    ))
 }
 
 #[utoipa::path(
-    post, path = "/api/posts", tag = "posts",
+    post, path = "/posts", tag = "posts",
     security(("bearer_auth" = [])),
     request_body = CreatePostRequest,
     responses(
         (status = 201, body = PostResponse),
-        (status = 400, body = ErrorResponse),
+        (status = 422, description = "Données invalides (VALIDATION_FAILED)", body = ErrorResponse),
         (status = 401, body = ErrorResponse),
     )
 )]
 pub async fn create(
     State(state): State<AppState>,
-    Extension(claims): Extension<Claims>,
+    user: AuthUser,
     ValidatedJson(payload): ValidatedJson<CreatePostRequest>,
 ) -> Result<(StatusCode, Json<PostResponse>), ApiError> {
-    let mut conn = state.pool.get().await.map_err(ApiError::from)?;
-    let post = service::create(&mut conn, claims.sub, payload).await?;
+    let mut conn = state.pool.get().await?;
+    let post = service::create(&mut conn, user.id, payload).await?;
     Ok((StatusCode::CREATED, Json(post)))
 }
 
 #[utoipa::path(
-    put, path = "/api/posts/{id}", tag = "posts",
+    put, path = "/posts/{id}", tag = "posts",
     security(("bearer_auth" = [])),
     params(("id" = Uuid, Path, description = "UUID du post")),
     request_body = UpdatePostRequest,
     responses(
         (status = 200, body = PostResponse),
-        (status = 400, body = ErrorResponse),
+        (status = 422, description = "Données invalides (VALIDATION_FAILED)", body = ErrorResponse),
         (status = 401, body = ErrorResponse),
         (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
@@ -89,18 +84,18 @@ pub async fn create(
 )]
 pub async fn update(
     State(state): State<AppState>,
-    Extension(claims): Extension<Claims>,
+    user: AuthUser,
     ValidatedPath(params): ValidatedPath<UuidParam>,
     ValidatedJson(payload): ValidatedJson<UpdatePostRequest>,
 ) -> Result<Json<PostResponse>, ApiError> {
-    let mut conn = state.pool.get().await.map_err(ApiError::from)?;
+    let mut conn = state.pool.get().await?;
     Ok(Json(
-        service::update(&mut conn, params.id, claims.sub, payload).await?,
+        service::update(&mut conn, user.id, params.id, payload).await?,
     ))
 }
 
 #[utoipa::path(
-    delete, path = "/api/posts/{id}", tag = "posts",
+    delete, path = "/posts/{id}", tag = "posts",
     security(("bearer_auth" = [])),
     params(("id" = Uuid, Path, description = "UUID du post")),
     responses(
@@ -112,10 +107,10 @@ pub async fn update(
 )]
 pub async fn delete(
     State(state): State<AppState>,
-    Extension(claims): Extension<Claims>,
+    user: AuthUser,
     ValidatedPath(params): ValidatedPath<UuidParam>,
 ) -> Result<StatusCode, ApiError> {
-    let mut conn = state.pool.get().await.map_err(ApiError::from)?;
-    service::delete(&mut conn, params.id, claims.sub).await?;
+    let mut conn = state.pool.get().await?;
+    service::delete(&mut conn, user.id, params.id).await?;
     Ok(StatusCode::NO_CONTENT)
 }

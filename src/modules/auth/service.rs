@@ -1,14 +1,15 @@
 use diesel_async::AsyncPgConnection;
 use uuid::Uuid;
 
-use crate::core::errors::ApiError;
+use crate::common::error::{ApiError, ErrorCode};
+use crate::common::jwt::{create_token, verify_token};
+use crate::common::password::{hash_password, verify_password};
+use crate::config::Config;
+use crate::db::repository::prelude::*;
 use crate::db::user::model::NewUser;
 use crate::db::user::repository::UserRepository;
-use crate::infra::config::Config;
-use crate::modules::auth::dto::{LoginRequest, LoginResponse, RefreshResponse, RegisterRequest};
-use crate::modules::auth::helpers::{create_refresh_token, create_token, verify_refresh_token};
-use crate::modules::auth::helpers::{hash_password, verify_password};
-use crate::modules::user::dto::UserResponse;
+use crate::modules::auth::dto::{LoginRequest, RegisterRequest, RegisterResponse, TokenResponse};
+
 // ---------------------------------------------------------------------------
 // Register
 // ---------------------------------------------------------------------------
@@ -16,87 +17,81 @@ use crate::modules::user::dto::UserResponse;
 pub async fn register(
     conn: &mut AsyncPgConnection,
     payload: RegisterRequest,
-) -> Result<UserResponse, ApiError> {
+) -> Result<RegisterResponse, ApiError> {
     if UserRepository::find_by_email(conn, &payload.email)
         .await?
         .is_some()
     {
-        return Err(ApiError::Conflict(format!(
-            "Email '{}' is already in use",
-            payload.email
-        )));
+        return Err(ErrorCode::EmailAlreadyUsed.into());
     }
 
     let hashed_password = hash_password(&payload.password).await?;
     let new_user = NewUser {
-        id: Uuid::new_v4(),
         email: payload.email,
         password: hashed_password,
         first_name: payload.first_name,
         last_name: payload.last_name,
     };
     let user = UserRepository::create(conn, new_user).await?;
-    Ok(UserResponse::from(user))
+    Ok(RegisterResponse::from(user))
 }
 
 // ---------------------------------------------------------------------------
 // Login
 // ---------------------------------------------------------------------------
 
-/// Retourne le LoginResponse ET le refresh token séparément.
+/// Retourne l'access token ET le refresh token séparément.
 /// Le handler place le refresh token dans un cookie HttpOnly.
 pub async fn login(
     conn: &mut AsyncPgConnection,
     config: &Config,
     payload: LoginRequest,
-) -> Result<(LoginResponse, String), ApiError> {
+) -> Result<(TokenResponse, String), ApiError> {
     let user = UserRepository::find_by_email(conn, &payload.email)
         .await?
-        .ok_or_else(|| ApiError::Authentication("Invalid email or password".to_string()))?;
+        .ok_or(ErrorCode::InvalidCredentials)?;
 
-    verify_password(&payload.password, &user.password).await?;
+    if !verify_password(&payload.password, &user.password).await? {
+        return Err(ErrorCode::InvalidCredentials.into());
+    }
 
-    let access_token = create_token(user.id, &config.jwt.secret, config.jwt.expiration)?;
-    let refresh_token = create_refresh_token(
-        user.id,
-        &config.jwt.refresh_secret,
-        config.jwt.refresh_expiration,
-    )?;
-
-    Ok((
-        LoginResponse {
-            access_token,
-            expires_in: config.jwt.expiration,
-            token_type: "Bearer".to_string(),
-        },
-        refresh_token,
-    ))
+    issue_tokens(config, user.id)
 }
 
 // ---------------------------------------------------------------------------
 // Refresh
 // ---------------------------------------------------------------------------
 
-/// Vérifie le refresh token et retourne un nouvel access token + nouveau refresh token (rotation).
-pub fn refresh(
+/// Vérifie le refresh token et retourne un nouvel access token + un nouveau refresh token.
+/// L'ancien refresh token n'est pas révoqué : il reste valide jusqu'à son expiration.
+/// Un compte supprimé ne peut plus obtenir de token (`INVALID_TOKEN`).
+pub async fn refresh(
+    conn: &mut AsyncPgConnection,
     config: &Config,
     refresh_token: &str,
-) -> Result<(RefreshResponse, String), ApiError> {
-    let claims = verify_refresh_token(refresh_token, &config.jwt.refresh_secret)?;
+) -> Result<(TokenResponse, String), ApiError> {
+    let claims = verify_token(refresh_token, &config.jwt.refresh_secret)?;
+    if !UserRepository::exists(conn, claims.sub).await? {
+        return Err(ApiError::new(ErrorCode::InvalidToken).with_detail("User no longer exists"));
+    }
+    issue_tokens(config, claims.sub)
+}
 
-    let new_access_token = create_token(claims.sub, &config.jwt.secret, config.jwt.expiration)?;
-    let new_refresh_token = create_refresh_token(
-        claims.sub,
+/// Crée un access token (réponse) et un refresh token (cookie) pour l'utilisateur.
+fn issue_tokens(config: &Config, user_id: Uuid) -> Result<(TokenResponse, String), ApiError> {
+    let access_token = create_token(user_id, &config.jwt.secret, config.jwt.expiration)?;
+    let refresh_token = create_token(
+        user_id,
         &config.jwt.refresh_secret,
         config.jwt.refresh_expiration,
     )?;
 
     Ok((
-        RefreshResponse {
-            access_token: new_access_token,
+        TokenResponse {
+            access_token,
             expires_in: config.jwt.expiration,
             token_type: "Bearer".to_string(),
         },
-        new_refresh_token,
+        refresh_token,
     ))
 }

@@ -1,18 +1,50 @@
+# Bases de données locales :
+#   docker compose up -d                       → postgres (5432) + postgres_test (5433)
+# API en conteneur (optionnel, profil "app") :
+#   docker compose --profile app up --build    → + api sur http://localhost:8080
+
 services:
   postgres:
-    image: postgres:16
+    image: postgres:18
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: app_db
     ports:
       - "5432:5432"
+    volumes:
+      # Postgres 18+ : le volume se monte sur /var/lib/postgresql (et non plus .../data)
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d app_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   postgres_test:
-    image: postgres:16
+    image: postgres:18
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: app_test_db
     ports:
       - "5433:5432"
+
+  api:
+    profiles: ["app"]
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:password@postgres:5432/app_db
+      JWT_SECRET: local_dev_secret_change_me
+      JWT_REFRESH_SECRET: local_dev_refresh_secret_change_me
+      CORS_ALLOWED_ORIGINS: http://localhost:5173
+      # Cookies sans Secure : l'API est servie en HTTP en local
+      ENVIRONMENT: development
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:

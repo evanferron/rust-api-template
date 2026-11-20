@@ -1,11 +1,11 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Modèle Diesel représentant une ligne de la table `users`.
-/// Utilisé pour les lectures (SELECT).
-#[derive(Debug, Clone, Serialize, Deserialize, Queryable, Selectable, Identifiable)]
+/// Utilisé pour les lectures (SELECT). Volontairement non sérialisable : il contient le hash
+/// du mot de passe, l'API expose des DTO (`UserResponse`, `RegisterResponse`).
+#[derive(Debug, Clone, Queryable, Selectable, Identifiable)]
 #[diesel(table_name = crate::db::schema::users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct User {
@@ -14,17 +14,16 @@ pub struct User {
     pub password: String,
     pub first_name: String,
     pub last_name: String,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 /// Modèle utilisé pour les insertions (INSERT INTO).
-/// Ne contient pas created_at / updated_at — gérés par la DB (DEFAULT NOW()).
+/// Ne contient ni `id` (`gen_random_uuid()`) ni `created_at` / `updated_at` (`NOW()`) : générés par la base.
 #[derive(Debug, Insertable)]
 #[diesel(table_name = crate::db::schema::users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct NewUser {
-    pub id: Uuid,
     pub email: String,
     pub password: String,
     pub first_name: String,

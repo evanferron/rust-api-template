@@ -1,6 +1,10 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use uuid::Uuid;
 use validator::Validate;
+
+use crate::db::user::model::User;
 
 // ---------------------------------------------------------------------------
 // Register
@@ -10,7 +14,7 @@ use validator::Validate;
 #[serde(deny_unknown_fields)]
 pub struct RegisterRequest {
     /// Adresse email unique de l'utilisateur
-    #[schema(example = "evan@example.com")]
+    #[schema(example = "jane.doe@example.com")]
     #[validate(email(message = "Invalid email address"))]
     pub email: String,
 
@@ -24,7 +28,7 @@ pub struct RegisterRequest {
     pub password: String,
 
     /// Prénom affiché
-    #[schema(example = "Evan")]
+    #[schema(example = "Jane")]
     #[validate(length(
         min = 1,
         max = 100,
@@ -33,13 +37,35 @@ pub struct RegisterRequest {
     pub first_name: String,
 
     /// Nom de famille
-    #[schema(example = "Ferron")]
+    #[schema(example = "Doe")]
     #[validate(length(
         min = 1,
         max = 100,
         message = "Last name must be between 1 and 100 characters"
     ))]
     pub last_name: String,
+}
+
+/// Utilisateur créé — ne contient jamais le hash du mot de passe.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct RegisterResponse {
+    pub id: Uuid,
+    pub email: String,
+    pub first_name: String,
+    pub last_name: String,
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<User> for RegisterResponse {
+    fn from(user: User) -> Self {
+        Self {
+            id: user.id,
+            email: user.email,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            created_at: user.created_at,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -49,7 +75,7 @@ pub struct RegisterRequest {
 #[derive(Deserialize, ToSchema, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct LoginRequest {
-    #[schema(example = "evan@example.com")]
+    #[schema(example = "jane.doe@example.com")]
     #[validate(email(message = "Invalid email address"))]
     pub email: String,
 
@@ -58,22 +84,17 @@ pub struct LoginRequest {
     pub password: String,
 }
 
+// ---------------------------------------------------------------------------
+// Tokens (réponse de login et de refresh)
+// ---------------------------------------------------------------------------
+
+/// Access token renvoyé par login et refresh. Le refresh token est posé dans un cookie HttpOnly.
 #[derive(Serialize, ToSchema)]
-pub struct LoginResponse {
+pub struct TokenResponse {
     pub access_token: String,
     /// Durée de vie de l'access token en secondes
     pub expires_in: u32,
-    pub token_type: String,
-}
-
-// ---------------------------------------------------------------------------
-// Refresh
-// ---------------------------------------------------------------------------
-
-#[derive(Serialize, ToSchema)]
-pub struct RefreshResponse {
-    pub access_token: String,
-    pub expires_in: u32,
+    /// Toujours `Bearer`
     pub token_type: String,
 }
 
@@ -85,10 +106,10 @@ mod tests {
     #[test]
     fn test_register_valid() {
         let req = RegisterRequest {
-            email: "evan@example.com".to_string(),
+            email: "jane.doe@example.com".to_string(),
             password: "securepass".to_string(),
-            first_name: "Evan".to_string(),
-            last_name: "Ferron".to_string(),
+            first_name: "Jane".to_string(),
+            last_name: "Doe".to_string(),
         };
         assert!(req.validate().is_ok());
     }
@@ -98,8 +119,8 @@ mod tests {
         let req = RegisterRequest {
             email: "not-an-email".to_string(),
             password: "securepass".to_string(),
-            first_name: "Evan".to_string(),
-            last_name: "Ferron".to_string(),
+            first_name: "Jane".to_string(),
+            last_name: "Doe".to_string(),
         };
         assert!(req.validate().is_err());
     }
@@ -107,10 +128,10 @@ mod tests {
     #[test]
     fn test_register_password_too_short() {
         let req = RegisterRequest {
-            email: "evan@example.com".to_string(),
+            email: "jane.doe@example.com".to_string(),
             password: "short".to_string(),
-            first_name: "Evan".to_string(),
-            last_name: "Ferron".to_string(),
+            first_name: "Jane".to_string(),
+            last_name: "Doe".to_string(),
         };
         assert!(req.validate().is_err());
     }

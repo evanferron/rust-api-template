@@ -1,40 +1,26 @@
-mod steps {
-    pub mod auth_steps;
-    pub mod post_steps;
-    pub mod user_steps;
-}
+//! Tests e2e Cucumber : `tests/features/*.feature`, exécutés sur le router complet.
+//!
+//! Chaque scénario commence par « la base de données est réinitialisée » (Background),
+//! d'où l'exécution séquentielle.
+
 mod common;
 
-use cucumber::World;
-// use steps::auth_steps::AuthWorld;
-// use steps::post_steps::PostsWorld;
-use steps::user_steps::UsersWorld;
+mod steps {
+    pub mod auth_steps;
+    pub mod common_steps;
+    pub mod post_steps;
+    pub mod user_steps;
+    pub mod world;
+}
 
-use crate::{
-    common::reset_db,
-    steps::{auth_steps::AuthWorld, post_steps::PostsWorld},
-};
+use cucumber::World;
+use steps::world::ApiWorld;
 
 #[tokio::main]
 async fn main() {
-    // AUTH
-    reset_db();
-    AuthWorld::cucumber()
+    ApiWorld::cucumber()
         .max_concurrent_scenarios(1)
-        .run("tests/features/auth.feature")
-        .await;
-
-    // POSTS
-    reset_db();
-    PostsWorld::cucumber()
-        .max_concurrent_scenarios(1)
-        .run("tests/features/post.feature")
-        .await;
-
-    // USERS
-    reset_db();
-    UsersWorld::cucumber()
-        .max_concurrent_scenarios(1)
-        .run("tests/features/user.feature")
+        .fail_on_skipped()
+        .run_and_exit("tests/features")
         .await;
 }

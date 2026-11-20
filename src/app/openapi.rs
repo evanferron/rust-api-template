@@ -1,0 +1,220 @@
+//! Informations générales de la documentation OpenAPI.
+//!
+//! Les routes et schémas ne sont **pas** listés ici : chaque module les déclare via
+//! `utoipa_axum` (`OpenApiRouter::routes(routes!(...))`) et ils sont collectés automatiquement.
+
+use utoipa::Modify;
+use utoipa::OpenApi;
+use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
+
+#[derive(OpenApi)]
+#[openapi(
+    tags(
+        (name = "health", description = "Vérification de l'état du serveur"),
+        (name = "auth",   description = "Authentification et gestion des tokens"),
+        (name = "users",  description = "Gestion des utilisateurs"),
+        (name = "posts",  description = "Gestion des posts"),
+    ),
+    info(
+        title = env!("CARGO_PKG_NAME"),
+        version = env!("CARGO_PKG_VERSION"),
+        description = "API REST — Axum + Diesel + PostgreSQL",
+    ),
+    modifiers(&SecurityAddon),
+)]
+pub struct ApiDoc;
+
+/// Ajoute le schéma Bearer JWT à la doc Swagger.
+pub struct SecurityAddon;
+
+impl Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        let components = openapi.components.get_or_insert_with(Default::default);
+        components.add_security_scheme(
+            "bearer_auth",
+            SecurityScheme::Http(
+                HttpBuilder::new()
+                    .scheme(HttpAuthScheme::Bearer)
+                    .bearer_format("JWT")
+                    .build(),
+            ),
+        );
+    }
+}
+
+// ─── Tests unitaires pour la documentation OpenAPI ─────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ─── Helper ─────────────────────────────────────────────────────────────
+
+    fn build_doc() -> utoipa::openapi::OpenApi {
+        crate::app::openapi_doc()
+    }
+
+    // ─── Tags ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_openapi_tags_present() {
+        let doc = build_doc();
+        let tags: Vec<&str> = doc
+            .tags
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .map(|t| t.name.as_str())
+            .collect();
+
+        assert!(tags.contains(&"health"), "tag 'health' manquant");
+        assert!(tags.contains(&"auth"), "tag 'auth' manquant");
+        assert!(tags.contains(&"users"), "tag 'users' manquant");
+        assert!(tags.contains(&"posts"), "tag 'posts' manquant");
+    }
+
+    // ─── Paths ───────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_openapi_health_paths_exist() {
+        let doc = build_doc();
+        for path in ["/api/health/live", "/api/health/ready"] {
+            assert!(doc.paths.paths.contains_key(path), "{path} manquant");
+        }
+    }
+
+    #[test]
+    fn test_openapi_auth_paths_exist() {
+        let doc = build_doc();
+        let paths = &doc.paths.paths;
+        assert!(
+            paths.contains_key("/api/auth/register"),
+            "/api/auth/register manquant"
+        );
+        assert!(
+            paths.contains_key("/api/auth/login"),
+            "/api/auth/login manquant"
+        );
+        assert!(
+            paths.contains_key("/api/auth/refresh"),
+            "/api/auth/refresh manquant"
+        );
+    }
+
+    #[test]
+    fn test_openapi_post_paths_exist() {
+        let doc = build_doc();
+        let paths = &doc.paths.paths;
+        assert!(paths.contains_key("/api/posts"), "/api/posts manquant");
+        assert!(
+            paths.contains_key("/api/posts/{id}"),
+            "/api/posts/{{id}} manquant"
+        );
+    }
+
+    // ─── Schemas ─────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_openapi_schemas_present() {
+        let doc = build_doc();
+        let schemas = &doc
+            .components
+            .as_ref()
+            .expect("components should be set")
+            .schemas;
+
+        let expected = [
+            "ErrorResponse",
+            "ErrorCode",
+            "PaginatedResponse_PostResponse",
+            "PaginatedResponse_UserResponse",
+            "RegisterResponse",
+            "HealthResponse",
+            "RegisterRequest",
+            "LoginRequest",
+            "TokenResponse",
+            "UserResponse",
+            "UpdateUserRequest",
+            "PostResponse",
+            "CreatePostRequest",
+            "UpdatePostRequest",
+        ];
+
+        for name in &expected {
+            assert!(schemas.contains_key(*name), "schema '{}' manquant", name);
+        }
+    }
+
+    // ─── SecurityAddon ───────────────────────────────────────────────────────
+
+    #[test]
+    fn test_security_addon_adds_bearer_scheme() {
+        let mut doc = utoipa::openapi::OpenApiBuilder::new()
+            .info(utoipa::openapi::InfoBuilder::new().title("test").build())
+            .build();
+
+        SecurityAddon.modify(&mut doc);
+
+        let schemes = &doc
+            .components
+            .as_ref()
+            .expect("components should exist after modify")
+            .security_schemes;
+
+        assert!(
+            schemes.contains_key("bearer_auth"),
+            "bearer_auth scheme manquant"
+        );
+    }
+
+    #[test]
+    fn test_security_addon_scheme_is_http_bearer() {
+        use utoipa::openapi::RefOr;
+        use utoipa::openapi::security::SecurityScheme;
+
+        let mut doc = utoipa::openapi::OpenApiBuilder::new()
+            .info(utoipa::openapi::InfoBuilder::new().title("test").build())
+            .build();
+
+        SecurityAddon.modify(&mut doc);
+
+        let scheme = doc
+            .components
+            .as_ref()
+            .unwrap()
+            .security_schemes
+            .get("bearer_auth")
+            .unwrap();
+
+        assert!(
+            matches!(scheme, RefOr::T(SecurityScheme::Http(_))),
+            "le schéma devrait être Http"
+        );
+    }
+
+    #[test]
+    fn test_security_addon_idempotent() {
+        // Appeler modify deux fois ne doit pas dupliquer ni écraser le schéma
+        let mut doc = utoipa::openapi::OpenApiBuilder::new()
+            .info(utoipa::openapi::InfoBuilder::new().title("test").build())
+            .build();
+
+        SecurityAddon.modify(&mut doc);
+        SecurityAddon.modify(&mut doc);
+
+        let count = doc.components.as_ref().unwrap().security_schemes.len();
+
+        assert_eq!(count, 1, "modify deux fois ne doit pas créer de doublon");
+    }
+
+    #[test]
+    fn test_openapi_doc_is_serializable() {
+        // Vérifie que le doc entier peut être sérialisé en JSON valide
+        let doc = build_doc();
+        let json = serde_json::to_string(&doc);
+        assert!(
+            json.is_ok(),
+            "le doc OpenAPI doit être sérialisable en JSON"
+        );
+    }
+}

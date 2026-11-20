@@ -1,22 +1,18 @@
-use crate::core::middlewares::rate_limit::rate_limit_by_ip;
-use crate::infra::state::AppState;
-use axum::{Router, routing::post};
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
+
+use crate::common::state::AppState;
 
 pub mod dto;
 pub mod handler;
-pub mod helpers;
 pub mod service;
 
-/// Routes publiques d'authentification
-pub fn routes(state: AppState) -> Router {
-    Router::new()
-        .route("/auth/register", post(handler::register))
-        .route("/auth/login", post(handler::login))
-        .route("/auth/refresh", post(handler::refresh))
-        .route("/auth/logout", post(handler::logout))
-        .route_layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            rate_limit_by_ip,
-        ))
-        .with_state(state)
+/// Routes publiques d'authentification.
+/// register / login / refresh sont limités par IP via l'extracteur `AuthRateLimit`.
+pub fn routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(handler::register))
+        .routes(routes!(handler::login))
+        .routes(routes!(handler::refresh))
+        .routes(routes!(handler::logout))
 }

@@ -1,5 +1,5 @@
 Feature: Auth
-    API authentication workflows
+    API d'authentification : inscription, connexion, renouvellement du token
 
     Background:
         Given la base de données est réinitialisée
@@ -9,54 +9,62 @@ Feature: Auth
     # POST /api/auth/register
     # ============================================================================
 
-    Scenario: Register successfully with valid credentials
+    Scenario: S'inscrire avec succès
         When je m'enregistre avec:
             | email      | register@test.com |
             | password   | securepass        |
-            | first_name | Evan              |
-            | last_name  | Ferron            |
+            | first_name | Jane              |
+            | last_name  | Doe               |
         Then le statut de la réponse est 201
         And la réponse contient:
             | email      | register@test.com |
-            | first_name | Evan              |
-            | last_name  | Ferron            |
+            | first_name | Jane              |
+            | last_name  | Doe               |
         And le hash du mot de passe n'apparaît pas dans la réponse
 
-    Scenario: Register fails with invalid email
+    Scenario: S'inscrire avec un email invalide échoue
         When je m'enregistre avec:
             | email      | not-an-email |
             | password   | securepass   |
-            | first_name | Evan         |
-            | last_name  | Ferron       |
-        Then le statut de la réponse est 400
+            | first_name | Jane         |
+            | last_name  | Doe          |
+        Then le statut de la réponse est 422
+        And la réponse contient:
+            | code | VALIDATION_FAILED |
+        And la réponse signale une erreur sur le champ "email"
 
-    Scenario: Register fails with password too short
+    Scenario: S'inscrire avec un mot de passe trop court échoue
         When je m'enregistre avec:
             | email      | valid@test.com |
             | password   | short          |
-            | first_name | Evan           |
-            | last_name  | Ferron         |
-        Then le statut de la réponse est 400
+            | first_name | Jane           |
+            | last_name  | Doe            |
+        Then le statut de la réponse est 422
+        And la réponse contient:
+            | code | VALIDATION_FAILED |
+        And la réponse signale une erreur sur le champ "password"
 
-    Scenario: Register fails with duplicate email
+    Scenario: S'inscrire avec un email déjà utilisé échoue
         When je m'enregistre avec:
             | email      | duplicate@test.com |
             | password   | securepass         |
-            | first_name | Evan               |
-            | last_name  | Ferron             |
+            | first_name | Jane               |
+            | last_name  | Doe                |
         And je m'enregistre à nouveau avec:
             | email      | duplicate@test.com |
             | password   | securepass         |
-            | first_name | Evan               |
-            | last_name  | Ferron             |
+            | first_name | Jane               |
+            | last_name  | Doe                |
         Then le statut de la réponse est 409
+        And la réponse contient:
+            | code | EMAIL_ALREADY_USED |
 
 
     # ============================================================================
     # POST /api/auth/login
     # ============================================================================
 
-    Scenario: Login successfully with valid credentials
+    Scenario: Se connecter avec succès
         Given je suis enregistré avec:
             | email    | login@test.com |
             | password | securepass     |
@@ -66,7 +74,7 @@ Feature: Auth
         Then le statut de la réponse est 200
         And la réponse contient un access_token
 
-    Scenario: Login fails with wrong password
+    Scenario: Se connecter avec un mauvais mot de passe échoue
         Given je suis enregistré avec:
             | email    | user@test.com |
             | password | correctpass   |
@@ -74,19 +82,23 @@ Feature: Auth
             | email    | user@test.com |
             | password | wrongpass     |
         Then le statut de la réponse est 401
+        And la réponse contient:
+            | code | INVALID_CREDENTIALS |
 
-    Scenario: Login fails with unknown email
+    Scenario: Se connecter avec un email inconnu échoue
         When je me connecte avec:
             | email    | ghost@test.com |
             | password | anypass        |
         Then le statut de la réponse est 401
+        And la réponse contient:
+            | code | INVALID_CREDENTIALS |
 
 
     # ============================================================================
     # POST /api/auth/refresh
     # ============================================================================
 
-    Scenario: Refresh token succeeds with valid refresh cookie
+    Scenario: Renouveler le token avec le cookie de refresh
         Given je suis enregistré et connecté avec:
             | email    | refresh@test.com |
             | password | securepass       |
@@ -94,7 +106,17 @@ Feature: Auth
         Then le statut de la réponse est 200
         And la réponse contient un nouvel access_token
 
-    Scenario: Refresh token fails without refresh cookie
+    Scenario: Renouveler le token après suppression du compte échoue
+        Given je suis connecté en tant que "deleted@test.com" avec le mot de passe "securepass"
+        When je supprime mon compte
+        And j'appelle l'endpoint refresh avec le refresh_token cookie
+        Then le statut de la réponse est 401
+        And la réponse contient:
+            | code | INVALID_TOKEN |
+
+    Scenario: Renouveler le token sans cookie de refresh échoue
         When j'appelle l'endpoint refresh sans cookie
         Then le statut de la réponse est 401
+        And la réponse contient:
+            | code | UNAUTHORIZED |
 

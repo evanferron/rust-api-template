@@ -1,0 +1,137 @@
+name: CI
+
+# Contrôle qualité bloquant : format, lint, tests, MSRV, build Docker.
+# L'audit des dépendances est dans security-audit.yml (non bloquant pour pouvoir livrer un hotfix).
+
+# push sur main + pull requests : une branche avec une PR ouverte n'est testée qu'une fois.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Un nouveau commit sur une PR annule le run précédent de cette PR ; les runs de main vont au bout
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Formatage + lint (sans base de données)
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Format & Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo fmt
+        run: cargo fmt --all --check
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+  # ---------------------------------------------------------------------------
+  # Tests (unitaires + intégration + Cucumber) avec couverture
+  # ---------------------------------------------------------------------------
+  test:
+    name: Tests & Coverage
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: app_test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://postgres:password@localhost:5432/app_test_db
+      DATABASE_TEST_URL: postgres://postgres:password@localhost:5432/app_test_db
+      JWT_SECRET: ci_secret_not_used_in_prod
+      JWT_REFRESH_SECRET: ci_refresh_secret_not_used_in_prod
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # requis par SonarCloud
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: taiki-e/install-action@cargo-llvm-cov
+
+      # Les migrations sont appliquées par les tests eux-mêmes
+      - name: Run tests with coverage
+        run: cargo llvm-cov --locked --lcov --output-path lcov.info
+
+      # Ignoré si le secret SONAR_TOKEN n'est pas configuré (ex: fork du template)
+      - name: SonarCloud scan
+        if: env.SONAR_TOKEN != ''
+        uses: SonarSource/sonarqube-scan-action@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Version minimale de Rust (rust-version du Cargo.toml)
+  # ---------------------------------------------------------------------------
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Read rust-version from Cargo.toml
+        id: msrv
+        run: echo "version=$(sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo check (MSRV ${{ steps.msrv.outputs.version }})
+        run: cargo check --all-targets --locked
+
+  # ---------------------------------------------------------------------------
+  # Build de l'image Docker (sans push)
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

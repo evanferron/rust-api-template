@@ -1,29 +1,20 @@
-use crate::core::middlewares::auth::require_auth;
-use crate::{core::middlewares::rate_limit::rate_limit_by_user, infra::state::AppState};
-use axum::{
-    Router,
-    routing::{delete, get, put},
-};
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
+
+use crate::common::state::AppState;
 
 pub mod dto;
 pub mod handler;
 pub mod service;
 
-/// Routes protégées par JWT
-/// Le middleware `require_auth` valide le token et injecte le claim dans les extensions
-pub fn routes(state: AppState) -> Router {
-    Router::new()
-        .route("/users", get(handler::get_all))
-        .route("/users/{id}", get(handler::get_by_id))
-        .route("/users/{id}", put(handler::update))
-        .route("/users/{id}", delete(handler::delete))
-        .route_layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            rate_limit_by_user,
+/// Routes des utilisateurs (authentifiées via l'extracteur `AuthUser`).
+/// Le chemin et la méthode de chaque route sont ceux déclarés dans `#[utoipa::path]`.
+pub fn routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(handler::get_all))
+        .routes(routes!(
+            handler::get_by_id,
+            handler::update,
+            handler::delete
         ))
-        .route_layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            require_auth,
-        ))
-        .with_state(state)
 }

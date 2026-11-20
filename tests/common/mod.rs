@@ -1,19 +1,15 @@
-use app::infra::config::Config;
-use app::infra::state::AppState;
-use app::{core::middlewares::rate_limit::RateLimitStore, launch::router::create_router};
+use api::app::build_app;
+use api::common::middlewares::rate_limit::RateLimitStore;
+use api::common::state::AppState;
+use api::config::{Config, RateLimitConfig};
 use axum::Router;
-use diesel::Connection;
-use diesel::pg::PgConnection;
 use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::bb8::Pool;
-use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use tokio::sync::OnceCell;
 
-use std::sync::{Arc, Mutex};
-
-static DB_LOCK: Mutex<()> = Mutex::new(());
-const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
+use std::num::NonZeroU32;
+use std::sync::Arc;
 
 static TEST_APP: OnceCell<Router> = OnceCell::const_new();
 
@@ -43,23 +39,16 @@ pub async fn test_pool() -> Pool<AsyncPgConnection> {
         .expect("Failed to create test pool")
 }
 
-pub fn reset_db() {
-    let _guard = DB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-
-    let db_url = test_db_url();
-    let mut conn =
-        PgConnection::establish(&db_url).expect("Failed to connect to test DB for reset");
-
-    conn.revert_all_migrations(MIGRATIONS)
-        .expect("Failed to revert migrations");
-
-    conn.run_pending_migrations(MIGRATIONS)
-        .expect("Failed to run migrations on test DB");
+/// Vide la base de test (revert + run de toutes les migrations).
+pub async fn reset_db() {
+    api::db::reset_database(&test_db_url())
+        .await
+        .expect("Failed to reset test DB");
 }
 
 pub fn test_config() -> Config {
     dotenvy::dotenv().ok();
-    Config::from_env().expect("Failed to load test config")
+    Config::from_env().expect("invalid test configuration")
 }
 
 // ---------------------------------------------------------------------------
@@ -67,76 +56,24 @@ pub fn test_config() -> Config {
 // ---------------------------------------------------------------------------
 
 /// Construit l'AppState et le Router complet identiques à la prod.
-/// Utilisé avec `axum_test::TestClient` pour simuler de vraies requêtes HTTP.
+/// Les steps Cucumber envoient leurs requêtes via `tower::ServiceExt::oneshot`.
 pub async fn build_test_app() -> Router {
+    build_app(test_state().await)
+}
+
+/// État de test : base de test, config `.env`, limites de débit très hautes.
+pub async fn test_state() -> AppState {
     let config = test_config();
     let pool = test_pool().await;
 
-    let state = AppState {
+    AppState {
         pool,
         config: Arc::new(config),
-        rate_limit: RateLimitStore::new(1000, 1000), // limites hautes pour ne pas bloquer les tests
-    };
-
-    // Monte le même router que le serveur réel
-    Router::new().nest("/api", create_router(state))
-}
-
-// ---------------------------------------------------------------------------
-// Seed helpers
-// ---------------------------------------------------------------------------
-
-/// Crée un utilisateur et retourne son access token JWT.
-/// Pratique pour les tests de routes protégées.
-pub async fn seed_user_and_login(app: &Router, email: &str, password: &str) -> String {
-    use axum::{
-        body::Body,
-        http::{Request, header},
-    };
-    use tower::ServiceExt;
-
-    // Register
-    let register_body = serde_json::json!({
-        "email": email,
-        "password": password,
-        "first_name": "Test",
-        "last_name": "User"
-    });
-
-    app.clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/auth/register")
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(register_body.to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    // Login
-    let login_body = serde_json::json!({
-        "email": email,
-        "password": password,
-    });
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/auth/login")
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(login_body.to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    json["access_token"].as_str().unwrap().to_string()
+        // limites hautes pour ne pas bloquer les tests
+        rate_limit: RateLimitStore::new(&RateLimitConfig {
+            requests_per_minute: NonZeroU32::new(10_000).unwrap(),
+            auth_requests_per_minute: NonZeroU32::new(10_000).unwrap(),
+        }),
+        shutting_down: Default::default(),
+    }
 }
