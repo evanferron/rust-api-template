@@ -17,8 +17,7 @@ use crate::common::error::{ApiError, ErrorCode};
 
 /// Claims embarqués dans les JWT (access token et refresh token).
 /// Les deux tokens partagent la même structure mais sont signés avec des secrets distincts.
-/// Injectés dans les extensions de la requête par `require_auth`,
-/// puis extraits dans les handlers via `Extension<Claims>`.
+/// Dans les handlers, utiliser l'extracteur `AuthUser` (`common::extract`) plutôt que les claims.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
     /// Subject — UUID de l'utilisateur

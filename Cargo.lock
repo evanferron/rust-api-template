@@ -105,7 +105,6 @@ dependencies = [
  "jsonwebtoken",
  "serde",
  "serde_json",
- "thiserror",
  "time",
  "tokio",
  "tower",
