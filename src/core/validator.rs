@@ -5,7 +5,6 @@ use axum::{
     Json,
     extract::{FromRequest, Request},
 };
-use uuid::Uuid;
 use validator::Validate;
 
 use crate::core::errors::ApiError;
@@ -52,10 +51,6 @@ where
 
         Ok(ValidatedQuery(value))
     }
-}
-
-pub fn parse_uuid(id: &str) -> Result<Uuid, ApiError> {
-    Uuid::parse_str(id).map_err(|_| ApiError::BadRequest(format!("'{}' is not a valid UUID", id)))
 }
 
 pub struct ValidatedPath<T>(pub T);
