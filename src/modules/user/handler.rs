@@ -1,7 +1,8 @@
 use axum::{Json, extract::State, http::StatusCode};
 
 use crate::common::error::{ApiError, ErrorResponse};
-use crate::common::extract::{AuthUser, UuidParam, ValidatedJson, ValidatedPath};
+use crate::common::extract::{AuthUser, UuidParam, ValidatedJson, ValidatedPath, ValidatedQuery};
+use crate::common::pagination::{PaginatedResponse, PaginationParams, PaginationQuery};
 use crate::common::state::AppState;
 use crate::modules::user::dto::{UpdateUserRequest, UserResponse};
 use crate::modules::user::service;
@@ -9,17 +10,23 @@ use crate::modules::user::service;
 #[utoipa::path(
     get, path = "/users", tag = "users",
     security(("bearer_auth" = [])),
+    params(
+        ("page" = Option<i64>, Query, description = "Numéro de page (défaut: 1)"),
+        ("per_page" = Option<i64>, Query, description = "Éléments par page (défaut: 20, max: 100)"),
+    ),
     responses(
-        (status = 200, body = Vec<UserResponse>),
+        (status = 200, body = PaginatedResponse<UserResponse>),
         (status = 401, body = ErrorResponse),
     )
 )]
 pub async fn get_all(
     State(state): State<AppState>,
     _user: AuthUser,
-) -> Result<Json<Vec<UserResponse>>, ApiError> {
+    ValidatedQuery(pagination): ValidatedQuery<PaginationQuery>,
+) -> Result<Json<PaginatedResponse<UserResponse>>, ApiError> {
     let mut conn = state.pool.get().await?;
-    Ok(Json(service::get_all(&mut conn).await?))
+    let params = PaginationParams::from(pagination);
+    Ok(Json(service::get_all(&mut conn, params).await?))
 }
 
 #[utoipa::path(

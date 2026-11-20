@@ -75,9 +75,8 @@ async fn delete_other_account(world: &mut ApiWorld, email: String) {
 
 #[then(expr = "la réponse est une liste de {int} utilisateur")]
 async fn users_count(world: &mut ApiWorld, expected: usize) {
-    let users = world
-        .body
+    let users = world.body["data"]
         .as_array()
-        .expect("la réponse doit être une liste");
+        .unwrap_or_else(|| panic!("réponse paginée attendue : {}", world.body));
     assert_eq!(users.len(), expected, "{}", world.body);
 }

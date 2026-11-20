@@ -8,9 +8,13 @@ use crate::db::user::model::UserChangeset;
 use crate::db::user::repository::UserRepository;
 use crate::modules::user::dto::{UpdateUserRequest, UserResponse};
 
-pub async fn get_all(conn: &mut AsyncPgConnection) -> Result<Vec<UserResponse>, ApiError> {
-    let users = UserRepository::find_all(conn).await?;
-    Ok(users.into_iter().map(UserResponse::from).collect())
+/// Utilisateurs, paginés du plus récent au plus ancien.
+pub async fn get_all(
+    conn: &mut AsyncPgConnection,
+    params: PaginationParams,
+) -> Result<PaginatedResponse<UserResponse>, ApiError> {
+    let page = UserRepository::find_paginated(conn, params).await?;
+    Ok(page.map(UserResponse::from))
 }
 
 pub async fn get_by_id(conn: &mut AsyncPgConnection, id: Uuid) -> Result<UserResponse, ApiError> {

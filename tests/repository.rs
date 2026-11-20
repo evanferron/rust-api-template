@@ -88,6 +88,9 @@ async fn seed_post(conn: &mut AsyncPgConnection, user_id: Uuid, created_at: Date
 // Repositories de test — chaque macro est testée isolément
 // ---------------------------------------------------------------------------
 
+struct UserBaseRepo;
+api::impl_base_repository!(UserBaseRepo, User, api::db::schema::users, Uuid);
+
 struct UserExtrasRepo;
 api::impl_exists!(UserExtrasRepo, api::db::schema::users, Uuid);
 api::impl_count!(UserExtrasRepo, api::db::schema::users);
@@ -135,12 +138,10 @@ async fn find_by_id_returns_row_or_none() {
     let mut conn = test_conn().await;
     let user = seed_user(&mut conn).await;
 
-    let found = UserRepository::find_by_id(&mut conn, user.id)
-        .await
-        .unwrap();
+    let found = UserBaseRepo::find_by_id(&mut conn, user.id).await.unwrap();
     assert_eq!(found.map(|u| u.id), Some(user.id));
 
-    let missing = UserRepository::find_by_id(&mut conn, Uuid::new_v4())
+    let missing = UserBaseRepo::find_by_id(&mut conn, Uuid::new_v4())
         .await
         .unwrap();
     assert!(missing.is_none());
@@ -152,7 +153,7 @@ async fn find_all_contains_inserted_rows() {
     let a = seed_user(&mut conn).await;
     let b = seed_user(&mut conn).await;
 
-    let ids: Vec<Uuid> = UserRepository::find_all(&mut conn)
+    let ids: Vec<Uuid> = UserBaseRepo::find_all(&mut conn)
         .await
         .unwrap()
         .into_iter()
@@ -166,10 +167,10 @@ async fn delete_returns_true_then_false() {
     let mut conn = test_conn().await;
     let user = seed_user(&mut conn).await;
 
-    assert!(UserRepository::delete(&mut conn, user.id).await.unwrap());
-    assert!(!UserRepository::delete(&mut conn, user.id).await.unwrap());
+    assert!(UserBaseRepo::delete(&mut conn, user.id).await.unwrap());
+    assert!(!UserBaseRepo::delete(&mut conn, user.id).await.unwrap());
     assert!(
-        UserRepository::find_by_id(&mut conn, user.id)
+        UserBaseRepo::find_by_id(&mut conn, user.id)
             .await
             .unwrap()
             .is_none()
@@ -188,7 +189,7 @@ async fn fetch_via_base<R: BaseRepository<User, Uuid>>(
 async fn base_repository_is_usable_as_generic_bound() {
     let mut conn = test_conn().await;
     let user = seed_user(&mut conn).await;
-    let found = fetch_via_base::<UserRepository>(&mut conn, user.id).await;
+    let found = fetch_via_base::<UserBaseRepo>(&mut conn, user.id).await;
     assert_eq!(found.map(|u| u.id), Some(user.id));
 }
 

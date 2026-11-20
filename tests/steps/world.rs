@@ -140,15 +140,14 @@ impl ApiWorld {
             .unwrap_or_else(|| panic!("Aucun token pour {email}"))
     }
 
-    /// Id d'un utilisateur connecté au cours du scénario (via `GET /api/users`).
+    /// Id d'un utilisateur connecté au cours du scénario (via `GET /api/users`, 100 premiers).
     /// Ne modifie pas le statut ni le corps de la dernière réponse.
     pub async fn user_id_of(&mut self, email: &str) -> String {
         let (status, body) = (self.status, self.body.clone());
         let token = self.token_of(email);
-        self.send(Method::GET, "/api/users", None, Some(token))
+        self.send(Method::GET, "/api/users?per_page=100", None, Some(token))
             .await;
-        let id = self
-            .body
+        let id = self.body["data"]
             .as_array()
             .and_then(|users| users.iter().find(|u| u["email"] == email))
             .and_then(|u| u["id"].as_str())

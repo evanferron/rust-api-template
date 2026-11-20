@@ -127,6 +127,8 @@ mod tests {
             "ErrorResponse",
             "ErrorCode",
             "PaginatedResponse_PostResponse",
+            "PaginatedResponse_UserResponse",
+            "RegisterResponse",
             "HealthResponse",
             "RegisterRequest",
             "LoginRequest",
