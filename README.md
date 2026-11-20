@@ -75,6 +75,98 @@ src/
 
 Sens des dépendances : `app → modules → (common, db)`, `db → common`. Rien n'importe `app`.
 
+```mermaid
+flowchart TD
+    %% ───────────── Points d'entrée ─────────────
+    main["<b>main.rs</b><br/>charge .env + Config<br/>lance app::server::run"]
+    tests["<b>tests/</b><br/>Cucumber + repository<br/>utilisent build_app et db"]
+
+    %% ───────────── Racine ─────────────
+    config["<b>config.rs</b><br/>Config · ServerConfig · DatabaseConfig · JwtConfig<br/>ConfigError : toutes les variables invalides d'un coup"]
+
+    %% ───────────── app/ ─────────────
+    subgraph APP["app/ — assemblage et démarrage (importé seulement par main et tests)"]
+        direction TB
+        server["<b>server.rs</b><br/>logs → migrations → pool<br/>→ AppState → écoute HTTP"]
+        appmod["<b>mod.rs</b><br/>api_router : merge des modules sous /api<br/>build_app : layers, fallbacks, Swagger"]
+        openapi["<b>openapi.rs</b><br/>infos générales, tags, schéma Bearer"]
+        telemetry["<b>telemetry.rs</b><br/>logs pretty en dev, JSON en prod"]
+        server --> appmod
+        server --> telemetry
+        appmod --> openapi
+    end
+
+    %% ───────────── modules/ ─────────────
+    subgraph MODULES["modules/ — fonctionnalités HTTP (même format pour tous)"]
+        direction LR
+        health["<b>health</b>"]
+        auth["<b>auth</b><br/>+ helpers.rs (bcrypt)"]
+        user["<b>user</b>"]
+        post["<b>post</b>"]
+        fmt["chaque module :<br/>mod.rs = routes() via utoipa-axum<br/>handler → service → dto"]
+    end
+
+    %% ───────────── common/ ─────────────
+    subgraph COMMON["common/ — briques partagées (n'importe ni app ni modules)"]
+        direction TB
+        error["<b>error.rs</b><br/>ApiError · ErrorCode (error_codes!)<br/>réponses RFC 9457"]
+        extract["<b>extract.rs</b><br/>AuthUser · ValidatedJson/Query/Path · UuidParam"]
+        jwt["<b>jwt.rs</b><br/>Claims · create/verify token · bearer_token"]
+        pagination["<b>pagination.rs</b><br/>PaginationQuery · PaginationParams · PaginatedResponse"]
+        state["<b>state.rs</b><br/>AppState : pool, config, rate limiters"]
+        mw["<b>middlewares/</b><br/>rate_limit (global + AuthRateLimit) · request_id"]
+        extract --> jwt
+        extract --> state
+        mw --> jwt
+        mw --> state
+        extract --> error
+        mw --> error
+        jwt --> error
+    end
+
+    %% ───────────── db/ ─────────────
+    subgraph DB["db/ — données (indépendant des modules : une table peut n'avoir aucun module)"]
+        direction TB
+        dbmod["<b>mod.rs</b><br/>pool bb8 · migrations embarquées<br/>diesel-async, sans libpq"]
+        repo["<b>repository.rs</b><br/>traits FindAll, FindById, Delete, Paginate…<br/>macros impl_*!"]
+        schema["<b>schema.rs</b><br/>généré par diesel_cli"]
+        entities["<b>user/ · post/</b><br/>model.rs + repository.rs"]
+        entities --> repo
+        entities --> schema
+    end
+
+    %% ───────────── Dépendances entre couches ─────────────
+    main --> config
+    main --> server
+    tests --> appmod
+    tests --> dbmod
+
+    appmod --> MODULES
+    server --> dbmod
+    server --> state
+
+    MODULES --> COMMON
+    MODULES --> entities
+    user -. "hash/verify_password" .-> auth
+
+    repo --> error
+    repo --> pagination
+    dbmod --> config
+    state --> config
+
+    %% ───────────── Style ─────────────
+    classDef entry fill:#fef3c7,stroke:#d97706,color:#000
+    classDef root fill:#e0e7ff,stroke:#4f46e5,color:#000
+    class main,tests entry
+    class config root
+```
+
+- **Flèches pleines** : elles vont toujours vers le bas, jamais vers `app` ni `modules`.
+- **`app/`** câble l'application, sans logique métier.
+- **`common/`** est le vocabulaire partagé des modules (erreurs, auth, validation, pagination).
+- **`db/`** ignore tout du HTTP.
+- **Flèche pointillée** : seule dépendance entre modules (`user` → `auth::helpers` pour le hachage des mots de passe).
+
 ---
 
 ## Ajouter un module
