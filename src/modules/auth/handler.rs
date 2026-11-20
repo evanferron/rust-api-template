@@ -2,9 +2,9 @@ use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use time::Duration;
 
-use crate::core::errors::{ApiError, ErrorCode, ErrorResponse};
-use crate::core::validator::ValidatedJson;
-use crate::infra::state::AppState;
+use crate::common::error::{ApiError, ErrorCode, ErrorResponse};
+use crate::common::extract::ValidatedJson;
+use crate::common::state::AppState;
 use crate::modules::auth::dto::{LoginRequest, LoginResponse, RefreshResponse, RegisterRequest};
 use crate::modules::auth::service;
 use crate::modules::user::dto::UserResponse;

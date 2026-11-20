@@ -2,7 +2,7 @@ use utoipa::Modify;
 use utoipa::OpenApi;
 use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
 
-use crate::core::errors::{ErrorCode, ErrorResponse};
+use crate::common::error::{ErrorCode, ErrorResponse};
 use crate::modules::auth::dto::{LoginRequest, LoginResponse, RefreshResponse, RegisterRequest};
 use crate::modules::health::dto::HealthResponse;
 use crate::modules::post::dto::{CreatePostRequest, PostResponse, UpdatePostRequest};

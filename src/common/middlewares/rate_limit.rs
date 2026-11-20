@@ -11,9 +11,9 @@ use governor::clock::{Clock, DefaultClock};
 use governor::{NotUntil, Quota, RateLimiter, state::keyed::DefaultKeyedStateStore};
 use std::net::SocketAddr;
 
-use crate::core::errors::{ApiError, ErrorCode};
-use crate::infra::state::AppState;
-use crate::modules::auth::helpers::Claims;
+use crate::common::error::{ApiError, ErrorCode};
+use crate::common::jwt::Claims;
+use crate::common::state::AppState;
 
 // ---------------------------------------------------------------------------
 // Types

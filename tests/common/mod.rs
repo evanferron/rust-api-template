@@ -1,6 +1,7 @@
-use app::infra::config::Config;
-use app::infra::state::AppState;
-use app::{core::middlewares::rate_limit::RateLimitStore, launch::router::create_router};
+use api::app::build_app;
+use api::common::middlewares::rate_limit::RateLimitStore;
+use api::common::state::AppState;
+use api::config::Config;
 use axum::Router;
 use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
@@ -39,7 +40,7 @@ pub async fn test_pool() -> Pool<AsyncPgConnection> {
 
 /// Vide la base de test (revert + run de toutes les migrations).
 pub async fn reset_db() {
-    app::infra::database::reset_database(&test_db_url())
+    api::db::reset_database(&test_db_url())
         .await
         .expect("Failed to reset test DB");
 }
@@ -54,7 +55,7 @@ pub fn test_config() -> Config {
 // ---------------------------------------------------------------------------
 
 /// Construit l'AppState et le Router complet identiques à la prod.
-/// Utilisé avec `axum_test::TestClient` pour simuler de vraies requêtes HTTP.
+/// Les steps Cucumber envoient leurs requêtes via `tower::ServiceExt::oneshot`.
 pub async fn build_test_app() -> Router {
     let config = test_config();
     let pool = test_pool().await;
@@ -66,7 +67,7 @@ pub async fn build_test_app() -> Router {
     };
 
     // Monte le même router que le serveur réel
-    Router::new().nest("/api", create_router(state))
+    build_app(state)
 }
 
 // ---------------------------------------------------------------------------

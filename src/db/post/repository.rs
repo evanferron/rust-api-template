@@ -2,7 +2,7 @@ use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper};
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
-use crate::core::errors::ApiError;
+use crate::common::error::ApiError;
 use crate::db::post::model::{NewPost, Post, PostChangeset};
 use crate::db::schema::{posts, users};
 use crate::db::user::model::User;
@@ -10,7 +10,7 @@ use crate::db::user::model::User;
 pub struct PostRepository;
 
 // ---------------------------------------------------------------------------
-// Capacités génériques (voir core::repository)
+// Capacités génériques (voir db::repository)
 // ---------------------------------------------------------------------------
 
 crate::impl_find_by_id!(PostRepository, Post, crate::db::schema::posts, Uuid);

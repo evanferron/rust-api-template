@@ -2,7 +2,7 @@ use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper};
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
-use crate::core::errors::ApiError;
+use crate::common::error::ApiError;
 use crate::db::schema::users::dsl;
 use crate::db::user::model::{NewUser, User, UserChangeset};
 

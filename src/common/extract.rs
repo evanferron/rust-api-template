@@ -9,9 +9,17 @@ use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
 use axum::extract::{FromRequest, FromRequestParts, Path, Query, Request};
 use axum::http::StatusCode;
 use axum::http::request::Parts;
+use serde::Deserialize;
+use uuid::Uuid;
 use validator::Validate;
 
-use crate::core::errors::{ApiError, ErrorCode};
+use crate::common::error::{ApiError, ErrorCode};
+
+/// Paramètre de chemin `{id}` de type UUID : `ValidatedPath(params): ValidatedPath<UuidParam>`.
+#[derive(Deserialize, Validate)]
+pub struct UuidParam {
+    pub id: Uuid,
+}
 
 /// Corps JSON validé.
 pub struct ValidatedJson<T>(pub T);

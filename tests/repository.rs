@@ -1,4 +1,4 @@
-//! Tests d'intégration des capacités génériques de `core::repository`.
+//! Tests d'intégration des capacités génériques de `db::repository`.
 //!
 //! Chaque test ouvre sa propre connexion dans une transaction de test
 //! (`begin_test_transaction`) : rien n'est commité, les tests sont indépendants
@@ -6,12 +6,12 @@
 //!
 //! Requiert `DATABASE_TEST_URL`.
 
-use app::core::repository::prelude::*;
-use app::db::post::model::{NewPost, Post};
-use app::db::post::repository::PostRepository;
-use app::db::schema::{posts, users};
-use app::db::user::model::{NewUser, User};
-use app::db::user::repository::UserRepository;
+use api::db::post::model::{NewPost, Post};
+use api::db::post::repository::PostRepository;
+use api::db::repository::prelude::*;
+use api::db::schema::{posts, users};
+use api::db::user::model::{NewUser, User};
+use api::db::user::repository::UserRepository;
 use chrono::{Duration, NaiveDateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
@@ -34,9 +34,7 @@ async fn test_conn() -> AsyncPgConnection {
     let url = test_db_url();
     MIGRATED
         .get_or_init(|| async {
-            app::infra::database::run_migrations(&url)
-                .await
-                .expect("run migrations");
+            api::db::run_migrations(&url).await.expect("run migrations");
         })
         .await;
 
@@ -91,11 +89,11 @@ async fn seed_post(conn: &mut AsyncPgConnection, user_id: Uuid, created_at: Naiv
 // ---------------------------------------------------------------------------
 
 struct UserExtrasRepo;
-app::impl_exists!(UserExtrasRepo, app::db::schema::users, Uuid);
-app::impl_count!(UserExtrasRepo, app::db::schema::users);
+api::impl_exists!(UserExtrasRepo, api::db::schema::users, Uuid);
+api::impl_count!(UserExtrasRepo, api::db::schema::users);
 
 struct UserPaginateRepo;
-app::impl_paginate!(UserPaginateRepo, User, app::db::schema::users, created_at);
+api::impl_paginate!(UserPaginateRepo, User, api::db::schema::users, created_at);
 
 // Table temporaire pour SoftDelete (aucune table du template n'a de deleted_at)
 diesel::table! {
@@ -116,8 +114,8 @@ struct SoftItem {
 }
 
 struct SoftItemRepo;
-app::impl_soft_delete!(SoftItemRepo, SoftItem, crate::soft_items, Uuid);
-app::impl_find_by_id!(SoftItemRepo, SoftItem, crate::soft_items, Uuid);
+api::impl_soft_delete!(SoftItemRepo, SoftItem, crate::soft_items, Uuid);
+api::impl_find_by_id!(SoftItemRepo, SoftItem, crate::soft_items, Uuid);
 
 async fn create_soft_items_table(conn: &mut AsyncPgConnection) {
     diesel::sql_query(

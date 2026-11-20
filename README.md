@@ -64,12 +64,16 @@ cargo run
 
 ```
 src/
-├── core/          ← erreurs, validation, middlewares, repository générique
-├── db/            ← modèles et repositories Diesel (un dossier par entité)
-├── infra/         ← Config, AppState
-├── launch/        ← assemblage du router, Swagger
-└── modules/       ← logique métier (auth, user, post...)
+├── main.rs
+├── lib.rs
+├── config.rs      ← configuration (variables d'environnement)
+├── app/           ← assemblage et démarrage : router, layers, OpenAPI, logs, serveur
+├── common/        ← partagé : erreurs, état, extracteurs, JWT, pagination, middlewares
+├── db/            ← pool, migrations, schéma, repository générique, model + repository par table
+└── modules/       ← fonctionnalités HTTP (auth, user, post…) : mod.rs (routes), handler, service, dto
 ```
+
+Sens des dépendances : `app → modules → (common, db)`, `db → common`. Rien n'importe `app`.
 
 ---
 
@@ -81,7 +85,7 @@ Prendre le module `post` comme référence (`src/db/post/` + `src/modules/post/`
 2. `diesel migration run` (régénère `src/db/schema.rs`)
 3. Créer `src/db/<nom>/` (model + repository) et `src/modules/<nom>/` (dto, service, handler, routes)
 4. Ajouter `pub mod <nom>;` dans `src/db/mod.rs` et `src/modules/mod.rs`
-5. Brancher les routes dans `src/launch/router.rs` et les déclarer dans `src/launch/swagger.rs`
+5. Brancher les routes dans `src/app/mod.rs` et les déclarer dans `src/app/openapi.rs`
 
 ---
 
@@ -138,5 +142,5 @@ Le scan SonarCloud ne s'exécute que si le secret `SONAR_TOKEN` est configuré.
 cargo doc --no-deps --document-private-items --open
 ```
 
-Le fonctionnement du repository générique est documenté dans le module `core::repository`.
+Le fonctionnement du repository générique est documenté dans le module `db::repository`.
 

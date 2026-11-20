@@ -5,9 +5,9 @@ use axum::{
     response::Response,
 };
 
-use crate::core::errors::{ApiError, ErrorCode};
-use crate::infra::state::AppState;
-use crate::modules::auth::helpers::verify_token;
+use crate::common::error::{ApiError, ErrorCode};
+use crate::common::jwt::verify_token;
+use crate::common::state::AppState;
 
 /// Middleware de protection des routes par JWT.
 ///

@@ -45,7 +45,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use validator::{ValidationErrors, ValidationErrorsKind};
 
-use crate::core::middlewares::request_id;
+use crate::common::middlewares::request_id;
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 

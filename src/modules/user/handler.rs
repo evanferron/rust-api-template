@@ -1,13 +1,11 @@
 use axum::{Extension, Json, extract::State, http::StatusCode};
 
-use crate::core::{
-    errors::{ApiError, ErrorCode, ErrorResponse},
-    validator::ValidatedPath,
-};
-use crate::core::{params::UuidParam, validator::ValidatedJson};
-use crate::modules::auth::helpers::Claims;
+use crate::common::error::{ApiError, ErrorCode, ErrorResponse};
+use crate::common::extract::{UuidParam, ValidatedJson, ValidatedPath};
+use crate::common::jwt::Claims;
+use crate::common::state::AppState;
 use crate::modules::user::dto::{UpdateUserRequest, UserResponse};
-use crate::{infra::state::AppState, modules::user::service};
+use crate::modules::user::service;
 
 #[utoipa::path(
     get, path = "/api/users", tag = "users",

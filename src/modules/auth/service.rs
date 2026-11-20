@@ -1,12 +1,12 @@
 use diesel_async::AsyncPgConnection;
 use uuid::Uuid;
 
-use crate::core::errors::{ApiError, ErrorCode};
+use crate::common::error::{ApiError, ErrorCode};
+use crate::common::jwt::{create_refresh_token, create_token, verify_refresh_token};
+use crate::config::Config;
 use crate::db::user::model::NewUser;
 use crate::db::user::repository::UserRepository;
-use crate::infra::config::Config;
 use crate::modules::auth::dto::{LoginRequest, LoginResponse, RefreshResponse, RegisterRequest};
-use crate::modules::auth::helpers::{create_refresh_token, create_token, verify_refresh_token};
 use crate::modules::auth::helpers::{hash_password, verify_password};
 use crate::modules::user::dto::UserResponse;
 // ---------------------------------------------------------------------------

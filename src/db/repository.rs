@@ -7,7 +7,7 @@
 //! ## Utilisation
 //!
 //! ```rust,ignore
-//! use crate::core::repository::prelude::*;
+//! use crate::db::repository::prelude::*;
 //!
 //! pub struct PostRepository;
 //!
@@ -43,15 +43,12 @@
 
 use std::future::Future;
 
+use crate::common::error::ApiError;
+pub use crate::common::pagination::{PaginatedResponse, PaginationParams};
 use diesel::expression::BoxableExpression;
 use diesel::pg::Pg;
 use diesel::sql_types::Bool;
 use diesel_async::AsyncPgConnection;
-use serde::Serialize;
-use utoipa::ToSchema;
-
-use crate::core::errors::ApiError;
-use crate::core::params::PaginationQuery;
 
 /// Macros disponibles pour les repositories.
 pub use crate::{
@@ -62,7 +59,7 @@ pub use crate::{
 /// Imports nécessaires pour appeler les méthodes génériques d'un repository.
 ///
 /// ```rust,ignore
-/// use crate::core::repository::prelude::*;
+/// use crate::db::repository::prelude::*;
 /// ```
 pub mod prelude {
     pub use super::{
@@ -170,78 +167,6 @@ pub trait BaseRepository<M, Id>: FindAll<M> + FindById<M, Id> + Delete<Id> {}
 impl<R, M, Id> BaseRepository<M, Id> for R where R: FindAll<M> + FindById<M, Id> + Delete<Id> {}
 
 // ---------------------------------------------------------------------------
-// Pagination
-// ---------------------------------------------------------------------------
-
-/// Paramètres de pagination normalisés (page ≥ 1, 1 ≤ per_page ≤ 100).
-#[derive(Debug, Clone, Copy)]
-pub struct PaginationParams {
-    /// Numéro de page (commence à 1)
-    pub page: i64,
-    /// Nombre d'éléments par page
-    pub per_page: i64,
-}
-
-impl PaginationParams {
-    pub const DEFAULT_PAGE: i64 = 1;
-    pub const DEFAULT_PER_PAGE: i64 = 20;
-    pub const MAX_PER_PAGE: i64 = 100;
-
-    pub fn new(page: i64, per_page: i64) -> Self {
-        Self {
-            page: page.max(1),
-            per_page: per_page.clamp(1, Self::MAX_PER_PAGE),
-        }
-    }
-
-    pub fn offset(&self) -> i64 {
-        (self.page - 1) * self.per_page
-    }
-}
-
-impl From<PaginationQuery> for PaginationParams {
-    fn from(query: PaginationQuery) -> Self {
-        Self::new(
-            query.page.unwrap_or(Self::DEFAULT_PAGE),
-            query.per_page.unwrap_or(Self::DEFAULT_PER_PAGE),
-        )
-    }
-}
-
-/// Réponse paginée avec métadonnées.
-#[derive(Debug, Serialize, ToSchema)]
-pub struct PaginatedResponse<T> {
-    pub data: Vec<T>,
-    pub total: i64,
-    pub page: i64,
-    pub per_page: i64,
-    pub total_pages: i64,
-}
-
-impl<T> PaginatedResponse<T> {
-    pub fn new(data: Vec<T>, total: i64, params: &PaginationParams) -> Self {
-        Self {
-            data,
-            total,
-            page: params.page,
-            per_page: params.per_page,
-            total_pages: (total + params.per_page - 1) / params.per_page,
-        }
-    }
-
-    /// Convertit les éléments (ex: modèle Diesel → DTO) en conservant les métadonnées.
-    pub fn map<U>(self, f: impl FnMut(T) -> U) -> PaginatedResponse<U> {
-        PaginatedResponse {
-            data: self.data.into_iter().map(f).collect(),
-            total: self.total,
-            page: self.page,
-            per_page: self.per_page,
-            total_pages: self.total_pages,
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Macros
 // ---------------------------------------------------------------------------
 
@@ -267,17 +192,17 @@ macro_rules! impl_base_repository {
 #[macro_export]
 macro_rules! impl_find_all {
     ($repo:ty, $model:ty, $table:path) => {
-        impl $crate::core::repository::FindAll<$model> for $repo {
+        impl $crate::db::repository::FindAll<$model> for $repo {
             async fn find_all(
                 conn: &mut diesel_async::AsyncPgConnection,
-            ) -> Result<Vec<$model>, $crate::core::errors::ApiError> {
+            ) -> Result<Vec<$model>, $crate::common::error::ApiError> {
                 use diesel_async::RunQueryDsl;
                 use $table as _table;
 
                 _table::table
                     .load::<$model>(conn)
                     .await
-                    .map_err($crate::core::errors::ApiError::from)
+                    .map_err($crate::common::error::ApiError::from)
             }
         }
     };
@@ -291,11 +216,11 @@ macro_rules! impl_find_all {
 #[macro_export]
 macro_rules! impl_find_by_id {
     ($repo:ty, $model:ty, $table:path, $id_type:ty) => {
-        impl $crate::core::repository::FindById<$model, $id_type> for $repo {
+        impl $crate::db::repository::FindById<$model, $id_type> for $repo {
             async fn find_by_id(
                 conn: &mut diesel_async::AsyncPgConnection,
                 id: $id_type,
-            ) -> Result<Option<$model>, $crate::core::errors::ApiError> {
+            ) -> Result<Option<$model>, $crate::common::error::ApiError> {
                 use diesel::{OptionalExtension, QueryDsl};
                 use diesel_async::RunQueryDsl;
                 use $table as _table;
@@ -305,7 +230,7 @@ macro_rules! impl_find_by_id {
                     .first::<$model>(conn)
                     .await
                     .optional()
-                    .map_err($crate::core::errors::ApiError::from)
+                    .map_err($crate::common::error::ApiError::from)
             }
         }
     };
@@ -319,11 +244,11 @@ macro_rules! impl_find_by_id {
 #[macro_export]
 macro_rules! impl_delete {
     ($repo:ty, $table:path, $id_type:ty) => {
-        impl $crate::core::repository::Delete<$id_type> for $repo {
+        impl $crate::db::repository::Delete<$id_type> for $repo {
             async fn delete(
                 conn: &mut diesel_async::AsyncPgConnection,
                 id: $id_type,
-            ) -> Result<bool, $crate::core::errors::ApiError> {
+            ) -> Result<bool, $crate::common::error::ApiError> {
                 use diesel::QueryDsl;
                 use diesel_async::RunQueryDsl;
                 use $table as _table;
@@ -331,7 +256,7 @@ macro_rules! impl_delete {
                 let rows = diesel::delete(_table::table.find(id))
                     .execute(conn)
                     .await
-                    .map_err($crate::core::errors::ApiError::from)?;
+                    .map_err($crate::common::error::ApiError::from)?;
 
                 Ok(rows > 0)
             }
@@ -347,11 +272,11 @@ macro_rules! impl_delete {
 #[macro_export]
 macro_rules! impl_exists {
     ($repo:ty, $table:path, $id_type:ty) => {
-        impl $crate::core::repository::Exists<$id_type> for $repo {
+        impl $crate::db::repository::Exists<$id_type> for $repo {
             async fn exists(
                 conn: &mut diesel_async::AsyncPgConnection,
                 id: $id_type,
-            ) -> Result<bool, $crate::core::errors::ApiError> {
+            ) -> Result<bool, $crate::common::error::ApiError> {
                 use diesel::QueryDsl;
                 use diesel_async::RunQueryDsl;
                 use $table as _table;
@@ -359,7 +284,7 @@ macro_rules! impl_exists {
                 diesel::select(diesel::dsl::exists(_table::table.find(id)))
                     .get_result::<bool>(conn)
                     .await
-                    .map_err($crate::core::errors::ApiError::from)
+                    .map_err($crate::common::error::ApiError::from)
             }
         }
     };
@@ -373,10 +298,10 @@ macro_rules! impl_exists {
 #[macro_export]
 macro_rules! impl_count {
     ($repo:ty, $table:path) => {
-        impl $crate::core::repository::Count for $repo {
+        impl $crate::db::repository::Count for $repo {
             async fn count(
                 conn: &mut diesel_async::AsyncPgConnection,
-            ) -> Result<i64, $crate::core::errors::ApiError> {
+            ) -> Result<i64, $crate::common::error::ApiError> {
                 use diesel::QueryDsl;
                 use diesel_async::RunQueryDsl;
                 use $table as _table;
@@ -385,7 +310,7 @@ macro_rules! impl_count {
                     .count()
                     .get_result::<i64>(conn)
                     .await
-                    .map_err($crate::core::errors::ApiError::from)
+                    .map_err($crate::common::error::ApiError::from)
             }
         }
     };
@@ -402,15 +327,15 @@ macro_rules! impl_count {
 #[macro_export]
 macro_rules! impl_paginate {
     ($repo:ty, $model:ty, $($table:ident)::+, $order_col:ident) => {
-        impl $crate::core::repository::Paginate<$model> for $repo {
+        impl $crate::db::repository::Paginate<$model> for $repo {
             type Table = $($table)::+::table;
 
             async fn find_paginated(
                 conn: &mut diesel_async::AsyncPgConnection,
-                params: $crate::core::repository::PaginationParams,
+                params: $crate::db::repository::PaginationParams,
             ) -> Result<
-                $crate::core::repository::PaginatedResponse<$model>,
-                $crate::core::errors::ApiError,
+                $crate::db::repository::PaginatedResponse<$model>,
+                $crate::common::error::ApiError,
             > {
                 use diesel::{ExpressionMethods, QueryDsl, Table};
                 use diesel_async::RunQueryDsl;
@@ -420,7 +345,7 @@ macro_rules! impl_paginate {
                     .count()
                     .get_result::<i64>(conn)
                     .await
-                    .map_err($crate::core::errors::ApiError::from)?;
+                    .map_err($crate::common::error::ApiError::from)?;
 
                 let data = _table::table
                     .order(_table::$order_col.desc())
@@ -429,23 +354,23 @@ macro_rules! impl_paginate {
                     .offset(params.offset())
                     .load::<$model>(conn)
                     .await
-                    .map_err($crate::core::errors::ApiError::from)?;
+                    .map_err($crate::common::error::ApiError::from)?;
 
-                Ok($crate::core::repository::PaginatedResponse::new(
+                Ok($crate::db::repository::PaginatedResponse::new(
                     data, total, &params,
                 ))
             }
 
             async fn find_paginated_by<F>(
                 conn: &mut diesel_async::AsyncPgConnection,
-                params: $crate::core::repository::PaginationParams,
+                params: $crate::db::repository::PaginationParams,
                 filter: F,
             ) -> Result<
-                $crate::core::repository::PaginatedResponse<$model>,
-                $crate::core::errors::ApiError,
+                $crate::db::repository::PaginatedResponse<$model>,
+                $crate::common::error::ApiError,
             >
             where
-                F: Fn() -> $crate::core::repository::Filter<Self::Table> + Send,
+                F: Fn() -> $crate::db::repository::Filter<Self::Table> + Send,
             {
                 use diesel::{ExpressionMethods, QueryDsl, Table};
                 use diesel_async::RunQueryDsl;
@@ -456,7 +381,7 @@ macro_rules! impl_paginate {
                     .count()
                     .get_result::<i64>(conn)
                     .await
-                    .map_err($crate::core::errors::ApiError::from)?;
+                    .map_err($crate::common::error::ApiError::from)?;
 
                 let data = _table::table
                     .filter(filter())
@@ -466,9 +391,9 @@ macro_rules! impl_paginate {
                     .offset(params.offset())
                     .load::<$model>(conn)
                     .await
-                    .map_err($crate::core::errors::ApiError::from)?;
+                    .map_err($crate::common::error::ApiError::from)?;
 
-                Ok($crate::core::repository::PaginatedResponse::new(
+                Ok($crate::db::repository::PaginatedResponse::new(
                     data, total, &params,
                 ))
             }
@@ -484,11 +409,11 @@ macro_rules! impl_paginate {
 #[macro_export]
 macro_rules! impl_soft_delete {
     ($repo:ty, $model:ty, $table:path, $id_type:ty) => {
-        impl $crate::core::repository::SoftDelete<$model, $id_type> for $repo {
+        impl $crate::db::repository::SoftDelete<$model, $id_type> for $repo {
             async fn soft_delete(
                 conn: &mut diesel_async::AsyncPgConnection,
                 id: $id_type,
-            ) -> Result<bool, $crate::core::errors::ApiError> {
+            ) -> Result<bool, $crate::common::error::ApiError> {
                 use diesel::{ExpressionMethods, QueryDsl};
                 use diesel_async::RunQueryDsl;
                 use $table as _table;
@@ -497,14 +422,14 @@ macro_rules! impl_soft_delete {
                     .set(_table::deleted_at.eq(diesel::dsl::now.nullable()))
                     .execute(conn)
                     .await
-                    .map_err($crate::core::errors::ApiError::from)?;
+                    .map_err($crate::common::error::ApiError::from)?;
 
                 Ok(rows > 0)
             }
 
             async fn find_active(
                 conn: &mut diesel_async::AsyncPgConnection,
-            ) -> Result<Vec<$model>, $crate::core::errors::ApiError> {
+            ) -> Result<Vec<$model>, $crate::common::error::ApiError> {
                 use diesel::{ExpressionMethods, QueryDsl};
                 use diesel_async::RunQueryDsl;
                 use $table as _table;
@@ -513,13 +438,13 @@ macro_rules! impl_soft_delete {
                     .filter(_table::deleted_at.is_null())
                     .load::<$model>(conn)
                     .await
-                    .map_err($crate::core::errors::ApiError::from)
+                    .map_err($crate::common::error::ApiError::from)
             }
 
             async fn restore(
                 conn: &mut diesel_async::AsyncPgConnection,
                 id: $id_type,
-            ) -> Result<bool, $crate::core::errors::ApiError> {
+            ) -> Result<bool, $crate::common::error::ApiError> {
                 use diesel::{ExpressionMethods, QueryDsl};
                 use diesel_async::RunQueryDsl;
                 use $table as _table;
@@ -528,78 +453,10 @@ macro_rules! impl_soft_delete {
                     .set(_table::deleted_at.eq(None::<chrono::NaiveDateTime>))
                     .execute(conn)
                     .await
-                    .map_err($crate::core::errors::ApiError::from)?;
+                    .map_err($crate::common::error::ApiError::from)?;
 
                 Ok(rows > 0)
             }
         }
     };
-}
-
-// ---------------------------------------------------------------------------
-// Tests unitaires — pagination (les macros sont testées dans tests/repository.rs)
-// ---------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pagination_params_are_clamped() {
-        let p = PaginationParams::new(0, 500);
-        assert_eq!((p.page, p.per_page), (1, PaginationParams::MAX_PER_PAGE));
-
-        let p = PaginationParams::new(-5, -10);
-        assert_eq!((p.page, p.per_page), (1, 1));
-
-        let p = PaginationParams::new(3, 20);
-        assert_eq!((p.page, p.per_page), (3, 20));
-    }
-
-    #[test]
-    fn pagination_offset() {
-        assert_eq!(PaginationParams::new(1, 20).offset(), 0);
-        assert_eq!(PaginationParams::new(3, 10).offset(), 20);
-    }
-
-    #[test]
-    fn pagination_from_query_uses_defaults() {
-        let p = PaginationParams::from(PaginationQuery {
-            page: None,
-            per_page: None,
-        });
-        assert_eq!(p.page, PaginationParams::DEFAULT_PAGE);
-        assert_eq!(p.per_page, PaginationParams::DEFAULT_PER_PAGE);
-    }
-
-    #[test]
-    fn paginated_response_total_pages() {
-        let p = PaginationParams::new(1, 10);
-        assert_eq!(
-            PaginatedResponse::<i32>::new(vec![], 100, &p).total_pages,
-            10
-        );
-        assert_eq!(
-            PaginatedResponse::<i32>::new(vec![], 101, &p).total_pages,
-            11
-        );
-        assert_eq!(PaginatedResponse::<i32>::new(vec![], 3, &p).total_pages, 1);
-        assert_eq!(PaginatedResponse::<i32>::new(vec![], 0, &p).total_pages, 0);
-    }
-
-    #[test]
-    fn paginated_response_map_keeps_metadata() {
-        let p = PaginationParams::new(2, 2);
-        let mapped = PaginatedResponse::new(vec![1, 2], 5, &p).map(|n| n.to_string());
-        assert_eq!(mapped.data, vec!["1", "2"]);
-        assert_eq!(
-            (
-                mapped.total,
-                mapped.page,
-                mapped.per_page,
-                mapped.total_pages
-            ),
-            (5, 2, 2, 3)
-        );
-    }
 }

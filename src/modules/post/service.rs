@@ -2,10 +2,10 @@ use diesel::ExpressionMethods;
 use diesel_async::AsyncPgConnection;
 use uuid::Uuid;
 
-use crate::core::errors::{ApiError, ErrorCode};
-use crate::core::repository::prelude::*;
+use crate::common::error::{ApiError, ErrorCode};
 use crate::db::post::model::{NewPost, Post, PostChangeset};
 use crate::db::post::repository::PostRepository;
+use crate::db::repository::prelude::*;
 use crate::db::schema::posts;
 use crate::modules::post::dto::{CreatePostRequest, PostResponse, UpdatePostRequest};
 

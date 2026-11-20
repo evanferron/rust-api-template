@@ -1,5 +1,5 @@
-use crate::core::middlewares::rate_limit::rate_limit_by_ip;
-use crate::infra::state::AppState;
+use crate::common::middlewares::rate_limit::rate_limit_by_ip;
+use crate::common::state::AppState;
 use axum::{Router, routing::post};
 
 pub mod dto;

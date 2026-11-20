@@ -2,13 +2,36 @@ use std::env;
 use std::fmt;
 use std::str::FromStr;
 
-use crate::infra::state::{DatabaseConfig, JwtConfig, ServerConfig};
-
+/// Configuration de l'application, chargée depuis l'environnement (voir `.env.example`).
 #[derive(Debug, Clone)]
 pub struct Config {
     pub server: ServerConfig,
     pub database: DatabaseConfig,
     pub jwt: JwtConfig,
+}
+
+#[derive(Debug, Clone)]
+pub struct ServerConfig {
+    pub host: String,
+    pub port: u16,
+    pub environment: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct DatabaseConfig {
+    pub url: String,
+    pub max_connections: u32,
+    pub acquire_timeout: u64,
+    pub idle_timeout: u64,
+    pub max_lifetime: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct JwtConfig {
+    pub secret: String,
+    pub expiration: u32,
+    pub refresh_secret: String,
+    pub refresh_expiration: u32,
 }
 
 /// Erreurs de configuration : liste **toutes** les variables manquantes ou invalides.

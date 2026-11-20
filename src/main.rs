@@ -1,4 +1,5 @@
-use app::{infra::config::Config, launch::Server};
+use api::app::server;
+use api::config::Config;
 use dotenvy::dotenv;
 
 #[tokio::main]
@@ -11,5 +12,5 @@ async fn main() -> std::io::Result<()> {
             std::process::exit(1);
         }
     };
-    Server::new(config).run().await
+    server::run(config).await
 }

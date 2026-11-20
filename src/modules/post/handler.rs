@@ -1,9 +1,8 @@
-use crate::core::errors::{ApiError, ErrorResponse};
-use crate::core::params::{PaginationQuery, UuidParam};
-use crate::core::repository::{PaginatedResponse, PaginationParams};
-use crate::core::validator::{ValidatedJson, ValidatedPath, ValidatedQuery};
-use crate::infra::state::AppState;
-use crate::modules::auth::helpers::Claims;
+use crate::common::error::{ApiError, ErrorResponse};
+use crate::common::extract::{UuidParam, ValidatedJson, ValidatedPath, ValidatedQuery};
+use crate::common::jwt::Claims;
+use crate::common::pagination::{PaginatedResponse, PaginationParams, PaginationQuery};
+use crate::common::state::AppState;
 use crate::modules::post::dto::{CreatePostRequest, PostResponse, UpdatePostRequest};
 use crate::modules::post::service;
 use axum::{Extension, Json, extract::State, http::StatusCode};
