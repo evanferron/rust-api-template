@@ -1,6 +1,6 @@
 use axum::{Json, extract::State, http::StatusCode};
 
-use crate::common::error::{ApiError, ErrorCode, ErrorResponse};
+use crate::common::error::{ApiError, ErrorResponse};
 use crate::common::extract::{AuthUser, UuidParam, ValidatedJson, ValidatedPath};
 use crate::common::state::AppState;
 use crate::modules::user::dto::{UpdateUserRequest, UserResponse};
@@ -60,13 +60,10 @@ pub async fn update(
     ValidatedPath(params): ValidatedPath<UuidParam>,
     ValidatedJson(payload): ValidatedJson<UpdateUserRequest>,
 ) -> Result<Json<UserResponse>, ApiError> {
-    if user.id != params.id {
-        return Err(
-            ApiError::new(ErrorCode::Forbidden).with_detail("You can only update your own profile")
-        );
-    }
     let mut conn = state.pool.get().await?;
-    Ok(Json(service::update(&mut conn, params.id, payload).await?))
+    Ok(Json(
+        service::update(&mut conn, user.id, params.id, payload).await?,
+    ))
 }
 
 #[utoipa::path(
@@ -85,12 +82,7 @@ pub async fn delete(
     user: AuthUser,
     ValidatedPath(params): ValidatedPath<UuidParam>,
 ) -> Result<StatusCode, ApiError> {
-    if user.id != params.id {
-        return Err(
-            ApiError::new(ErrorCode::Forbidden).with_detail("You can only delete your own account")
-        );
-    }
     let mut conn = state.pool.get().await?;
-    service::delete(&mut conn, params.id).await?;
+    service::delete(&mut conn, user.id, params.id).await?;
     Ok(StatusCode::NO_CONTENT)
 }

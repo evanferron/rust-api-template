@@ -20,11 +20,15 @@ pub async fn get_by_id(conn: &mut AsyncPgConnection, id: Uuid) -> Result<UserRes
     Ok(UserResponse::from(user))
 }
 
+/// Modifie le profil `id`. Seul l'utilisateur lui-même (`actor_id`) peut le faire.
 pub async fn update(
     conn: &mut AsyncPgConnection,
+    actor_id: Uuid,
     id: Uuid,
     payload: UpdateUserRequest,
 ) -> Result<UserResponse, ApiError> {
+    ensure_self(actor_id, id, "You can only update your own profile")?;
+
     let user = UserRepository::find_by_id(conn, id)
         .await?
         .ok_or(ErrorCode::UserNotFound)?;
@@ -52,9 +56,27 @@ pub async fn update(
         .map(UserResponse::from)
 }
 
-pub async fn delete(conn: &mut AsyncPgConnection, id: Uuid) -> Result<(), ApiError> {
+/// Supprime le compte `id`. Seul l'utilisateur lui-même (`actor_id`) peut le faire.
+pub async fn delete(
+    conn: &mut AsyncPgConnection,
+    actor_id: Uuid,
+    id: Uuid,
+) -> Result<(), ApiError> {
+    ensure_self(actor_id, id, "You can only delete your own account")?;
+
     match UserRepository::delete(conn, id).await? {
         true => Ok(()),
         false => Err(ErrorCode::UserNotFound.into()),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+fn ensure_self(actor_id: Uuid, id: Uuid, message: &str) -> Result<(), ApiError> {
+    if actor_id != id {
+        return Err(ApiError::new(ErrorCode::Forbidden).with_detail(message));
+    }
+    Ok(())
 }
